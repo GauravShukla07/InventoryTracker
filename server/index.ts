@@ -12,10 +12,21 @@ declare module 'express-session' {
 }
 
 const app = express();
-// Enable CORS for credentials
+// Enable CORS for credentials - fix for development
 app.use((req, res, next) => {
+  // For development, allow the specific Replit domain
+  const allowedOrigins = [
+    'https://2922ab8c-96b8-471d-8d25-149ae7dc5852-00-2117gqcuxpp1z.spock.replit.dev',
+    'http://localhost:5000',
+    req.headers.origin
+  ];
+  
+  const origin = req.headers.origin;
+  if (allowedOrigins.includes(origin)) {
+    res.header('Access-Control-Allow-Origin', origin);
+  }
+  
   res.header('Access-Control-Allow-Credentials', 'true');
-  res.header('Access-Control-Allow-Origin', req.headers.origin || '*');
   res.header('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS');
   res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, Content-Length, X-Requested-With');
   
@@ -58,7 +69,7 @@ app.use(session({
     secure: false,
     httpOnly: false, // Allow client-side access for debugging
     maxAge: 24 * 60 * 60 * 1000,
-    sameSite: 'lax', // Changed from 'none' to 'lax' for same-origin requests
+    sameSite: 'none', // Use 'none' for cross-origin requests in Replit
     domain: undefined,
     path: '/'
   },

@@ -70,7 +70,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.cookie('authToken', token, { 
         httpOnly: false, 
         maxAge: 24 * 60 * 60 * 1000,
-        sameSite: 'lax',
+        sameSite: 'none',
         secure: false 
       });
       res.json({ user: userWithoutPassword, token });
