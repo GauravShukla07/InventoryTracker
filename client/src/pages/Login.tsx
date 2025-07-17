@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useRouter } from "wouter";
+import { useLocation } from "wouter";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -18,7 +18,7 @@ import { UserPlus, LogIn, Key, Info } from "lucide-react";
 export default function Login() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const router = useRouter();
+  const [location, setLocation] = useLocation();
   const [showInvitationCode, setShowInvitationCode] = useState(false);
 
   // Check if registration is enabled
@@ -59,7 +59,7 @@ export default function Login() {
       
       // Force a small delay then redirect to ensure auth state is updated
       setTimeout(() => {
-        router("/");
+        setLocation("/");
       }, 100);
     },
     onError: (error: any) => {
