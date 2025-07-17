@@ -21,9 +21,10 @@ Preferred communication style: Simple, everyday language.
 
 ### Backend Architecture
 - **Framework**: Express.js with TypeScript
-- **Database**: PostgreSQL with Drizzle ORM
+- **Database**: PostgreSQL with Drizzle ORM and Neon serverless adapter
 - **Session Management**: Express sessions with PostgreSQL store
 - **API Design**: RESTful API with JSON responses
+- **Storage**: Database-backed storage implementation (DatabaseStorage)
 - **Development**: Hot reload with Vite integration in development mode
 
 ### Project Structure
@@ -38,10 +39,11 @@ Preferred communication style: Simple, everyday language.
 ## Key Components
 
 ### Database Schema (shared/schema.ts)
-- **Users**: Authentication and user management
-- **Assets**: Core asset tracking with detailed metadata
-- **Transfers**: Asset transfer history and tracking
-- **Repairs**: Repair tracking and status management
+- **Users**: Authentication, roles, and user management with PostgreSQL storage
+- **Assets**: Core asset tracking with detailed metadata and full database persistence
+- **Transfers**: Asset transfer history and tracking stored in database
+- **Repairs**: Repair tracking and status management with database persistence
+- **Relations**: Proper foreign key relationships between tables
 
 ### Authentication System
 - Session-based authentication using Express sessions
@@ -107,14 +109,30 @@ Preferred communication style: Simple, everyday language.
 4. **Environment**: Production mode serves static files and API from single process
 
 ### Database Management
-- Drizzle migrations for schema versioning
-- PostgreSQL as primary database with connection pooling
-- Environment-based configuration for different deployment stages
+- **Database**: PostgreSQL with Neon serverless adapter
+- **ORM**: Drizzle ORM with full TypeScript support
+- **Schema Management**: `npm run db:push` for schema updates
+- **Storage**: DatabaseStorage class implementing all CRUD operations
+- **Demo Data**: Pre-seeded users with different roles for testing
+- **Environment**: DATABASE_URL configured for PostgreSQL connection
 
 ### Key Features
+- **Database-Driven Architecture**: All data persisted in PostgreSQL database
+- **User Registration System**: Invitation-based registration with role assignment
+- **Role-Based Access Control**: Admin, Manager, Operator, and Viewer permissions
 - **Asset Lifecycle Management**: Complete tracking from acquisition to disposal
 - **Multi-location Support**: Track assets across different physical locations
 - **Custodian Management**: Assign and track asset responsibility
 - **Repair Workflow**: Monitor assets under repair with expected return dates
 - **Insurance & Warranty Tracking**: Maintain important asset documentation
 - **Audit Trail**: Complete history of all asset transfers and status changes
+- **User Management**: Full CRUD operations for user accounts and permissions
+
+### Recent Changes (July 17, 2025)
+- ✓ Integrated PostgreSQL database with Drizzle ORM
+- ✓ Replaced in-memory storage with database-backed storage
+- ✓ Added database relations and foreign key constraints
+- ✓ Implemented user registration with invitation code system
+- ✓ Created DatabaseStorage class for all data operations
+- ✓ Set up demo users with different role permissions
+- ✓ Successfully migrated schema with `npm run db:push`

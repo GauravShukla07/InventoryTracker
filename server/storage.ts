@@ -1,4 +1,6 @@
 import { users, assets, transfers, repairs, type User, type InsertUser, type UpdateUser, type Asset, type InsertAsset, type Transfer, type InsertTransfer, type Repair, type InsertRepair } from "@shared/schema";
+import { db } from "./db";
+import { eq } from "drizzle-orm";
 
 export interface IStorage {
   // User methods
@@ -317,4 +319,138 @@ export class MemStorage implements IStorage {
   }
 }
 
-export const storage = new MemStorage();
+// Database storage implementation
+export class DatabaseStorage implements IStorage {
+  async getUser(id: number): Promise<User | undefined> {
+    const [user] = await db.select().from(users).where(eq(users.id, id));
+    return user || undefined;
+  }
+
+  async getUserByEmail(email: string): Promise<User | undefined> {
+    const [user] = await db.select().from(users).where(eq(users.email, email));
+    return user || undefined;
+  }
+
+  async getUsers(): Promise<User[]> {
+    return await db.select().from(users);
+  }
+
+  async createUser(insertUser: InsertUser): Promise<User> {
+    const [user] = await db
+      .insert(users)
+      .values(insertUser)
+      .returning();
+    return user;
+  }
+
+  async updateUser(id: number, updates: UpdateUser): Promise<User | undefined> {
+    const [user] = await db
+      .update(users)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(users.id, id))
+      .returning();
+    return user || undefined;
+  }
+
+  async deleteUser(id: number): Promise<boolean> {
+    const result = await db.delete(users).where(eq(users.id, id));
+    return result.rowCount ? result.rowCount > 0 : false;
+  }
+
+  async updateUserLastLogin(id: number): Promise<void> {
+    await db
+      .update(users)
+      .set({ lastLogin: new Date(), updatedAt: new Date() })
+      .where(eq(users.id, id));
+  }
+
+  async isValidInvitationCode(code: string): Promise<boolean> {
+    const validCodes = ["ADMIN-INVITE-2025", "MANAGER-INVITE-2025"];
+    return validCodes.includes(code);
+  }
+
+  async isRegistrationEnabled(): Promise<boolean> {
+    return true;
+  }
+
+  // Asset methods
+  async getAssets(): Promise<Asset[]> {
+    return await db.select().from(assets);
+  }
+
+  async getAsset(id: number): Promise<Asset | undefined> {
+    const [asset] = await db.select().from(assets).where(eq(assets.id, id));
+    return asset || undefined;
+  }
+
+  async createAsset(insertAsset: InsertAsset): Promise<Asset> {
+    const [asset] = await db
+      .insert(assets)
+      .values(insertAsset)
+      .returning();
+    return asset;
+  }
+
+  async updateAsset(id: number, updates: Partial<InsertAsset>): Promise<Asset | undefined> {
+    const [asset] = await db
+      .update(assets)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(assets.id, id))
+      .returning();
+    return asset || undefined;
+  }
+
+  async deleteAsset(id: number): Promise<boolean> {
+    const result = await db.delete(assets).where(eq(assets.id, id));
+    return result.rowCount ? result.rowCount > 0 : false;
+  }
+
+  // Transfer methods
+  async getTransfers(): Promise<Transfer[]> {
+    return await db.select().from(transfers);
+  }
+
+  async getTransfersByAsset(assetId: number): Promise<Transfer[]> {
+    return await db.select().from(transfers).where(eq(transfers.assetId, assetId));
+  }
+
+  async createTransfer(insertTransfer: InsertTransfer): Promise<Transfer> {
+    const [transfer] = await db
+      .insert(transfers)
+      .values(insertTransfer)
+      .returning();
+    return transfer;
+  }
+
+  // Repair methods
+  async getRepairs(): Promise<Repair[]> {
+    return await db.select().from(repairs);
+  }
+
+  async getActiveRepairs(): Promise<Repair[]> {
+    return await db.select().from(repairs).where(eq(repairs.status, "in_repair"));
+  }
+
+  async getRepairsByAsset(assetId: number): Promise<Repair[]> {
+    return await db.select().from(repairs).where(eq(repairs.assetId, assetId));
+  }
+
+  async createRepair(insertRepair: InsertRepair): Promise<Repair> {
+    const [repair] = await db
+      .insert(repairs)
+      .values(insertRepair)
+      .returning();
+    return repair;
+  }
+
+  async updateRepair(id: number, updates: Partial<InsertRepair>): Promise<Repair | undefined> {
+    const [repair] = await db
+      .update(repairs)
+      .set(updates)
+      .where(eq(repairs.id, id))
+      .returning();
+    return repair || undefined;
+  }
+}
+
+export const storage = new DatabaseStorage();

@@ -1,4 +1,5 @@
 import { pgTable, text, serial, integer, boolean, timestamp, numeric } from "drizzle-orm/pg-core";
+import { relations } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -14,6 +15,11 @@ export const users = pgTable("users", {
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
+
+export const usersRelations = relations(users, ({ many }) => ({
+  transfers: many(transfers),
+  repairs: many(repairs),
+}));
 
 export const assets = pgTable("assets", {
   id: serial("id").primaryKey(),
@@ -64,6 +70,26 @@ export const repairs = pgTable("repairs", {
   sentDate: timestamp("sent_date").notNull().defaultNow(),
   createdAt: timestamp("created_at").defaultNow(),
 });
+
+// Relations
+export const assetsRelations = relations(assets, ({ many }) => ({
+  transfers: many(transfers),
+  repairs: many(repairs),
+}));
+
+export const transfersRelations = relations(transfers, ({ one }) => ({
+  asset: one(assets, {
+    fields: [transfers.assetId],
+    references: [assets.id],
+  }),
+}));
+
+export const repairsRelations = relations(repairs, ({ one }) => ({
+  asset: one(assets, {
+    fields: [repairs.assetId],
+    references: [assets.id],
+  }),
+}));
 
 // Insert schemas
 export const insertUserSchema = createInsertSchema(users).omit({
