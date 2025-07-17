@@ -42,7 +42,7 @@ export default function AddAsset() {
 
   const createAssetMutation = useMutation({
     mutationFn: async (data: InsertAsset) => {
-      const response = await apiRequest("POST", "/api/assets", data);
+      const response = await apiRequest("/api/assets", { method: "POST", body: data });
       return response.json();
     },
     onSuccess: () => {

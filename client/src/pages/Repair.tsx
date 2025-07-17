@@ -37,7 +37,7 @@ export default function Repair() {
 
   const sendForRepairMutation = useMutation({
     mutationFn: async (data: InsertRepair) => {
-      const response = await apiRequest("POST", "/api/repairs", data);
+      const response = await apiRequest("/api/repairs", { method: "POST", body: data });
       return response.json();
     },
     onSuccess: () => {

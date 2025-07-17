@@ -39,7 +39,7 @@ export default function Transfer() {
 
   const transferAssetMutation = useMutation({
     mutationFn: async (data: InsertTransfer) => {
-      const response = await apiRequest("POST", "/api/transfers", data);
+      const response = await apiRequest("/api/transfers", { method: "POST", body: data });
       return response.json();
     },
     onSuccess: () => {

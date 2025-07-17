@@ -106,7 +106,10 @@ export default function UserManagement() {
   });
 
   const createMutation = useMutation({
-    mutationFn: (data: InsertUser) => apiRequest("/api/users", { method: "POST", body: data }),
+    mutationFn: async (data: InsertUser) => {
+      const response = await apiRequest("/api/users", { method: "POST", body: data });
+      return response.json();
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/users"] });
       createForm.reset();
@@ -126,8 +129,10 @@ export default function UserManagement() {
   });
 
   const updateMutation = useMutation({
-    mutationFn: ({ id, data }: { id: number; data: UpdateUser }) =>
-      apiRequest(`/api/users/${id}`, { method: "PUT", body: data }),
+    mutationFn: async ({ id, data }: { id: number; data: UpdateUser }) => {
+      const response = await apiRequest(`/api/users/${id}`, { method: "PUT", body: data });
+      return response.json();
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/users"] });
       editForm.reset();
@@ -148,7 +153,10 @@ export default function UserManagement() {
   });
 
   const deleteMutation = useMutation({
-    mutationFn: (id: number) => apiRequest(`/api/users/${id}`, { method: "DELETE" }),
+    mutationFn: async (id: number) => {
+      const response = await apiRequest(`/api/users/${id}`, { method: "DELETE" });
+      return response.json();
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/users"] });
       toast({
