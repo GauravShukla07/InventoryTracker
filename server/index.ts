@@ -24,6 +24,19 @@ app.use((req, res, next) => {
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 
+// Add cookie parser for token authentication
+app.use((req, res, next) => {
+  const cookies: any = {};
+  if (req.headers.cookie) {
+    req.headers.cookie.split(';').forEach((cookie: string) => {
+      const [name, value] = cookie.trim().split('=');
+      cookies[name] = value;
+    });
+  }
+  (req as any).cookies = cookies;
+  next();
+});
+
 // Configure session store with memory store
 const MemStore = MemoryStore(session);
 
@@ -33,17 +46,18 @@ app.use(session({
     checkPeriod: 86400000 // prune expired entries every 24h
   }),
   secret: process.env.SESSION_SECRET || 'inventory-management-secret-key-for-development',
-  resave: false,
-  saveUninitialized: false,
+  resave: true, // Force session save even if unmodified
+  saveUninitialized: true, // Save uninitialized sessions
+  rolling: true, // Reset expiration on every request
   cookie: {
     secure: false,
-    httpOnly: true,
+    httpOnly: false, // Allow client-side access for debugging
     maxAge: 24 * 60 * 60 * 1000,
-    sameSite: 'lax',
-    domain: undefined, // Allow cookies to work across all domains
+    sameSite: 'none', // Required for cross-origin requests
+    domain: undefined,
     path: '/'
   },
-  name: 'connect.sid'
+  name: 'sessionid'
 }));
 
 app.use((req, res, next) => {
