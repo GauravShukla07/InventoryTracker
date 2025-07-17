@@ -463,9 +463,9 @@ if (process.env.SQL_SERVER === 'true') {
   storage = new SqlServerStorage();
   console.log('Using SQL Server storage implementation');
 } else {
-  // Use PostgreSQL storage (default)
-  storage = new DatabaseStorage();
-  console.log('Using PostgreSQL storage implementation');
+  // Use memory storage as default for now to avoid database connection issues
+  storage = new MemStorage();
+  console.log('Using memory storage implementation');
 }
 
 export { storage };
