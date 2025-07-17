@@ -1,31 +1,45 @@
 import { useState } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { z } from "zod";
-import { authApi, type LoginCredentials } from "@/lib/auth";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2 } from "lucide-react";
-
-const loginSchema = z.object({
-  email: z.string().email("Please enter a valid email address"),
-  password: z.string().min(1, "Password is required"),
-});
+import { authApi } from "@/lib/auth";
+import { apiRequest } from "@/lib/queryClient";
+import { loginSchema, registerSchema, type LoginCredentials, type RegisterData } from "@shared/schema";
+import { UserPlus, LogIn, Key, Info } from "lucide-react";
 
 export default function Login() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const [showInvitationCode, setShowInvitationCode] = useState(false);
 
-  const form = useForm<LoginCredentials>({
+  // Check if registration is enabled
+  const { data: registrationStatus } = useQuery({
+    queryKey: ["/api/auth/registration-status"],
+    queryFn: () => apiRequest("/api/auth/registration-status"),
+  });
+
+  const loginForm = useForm<LoginCredentials>({
     resolver: zodResolver(loginSchema),
     defaultValues: {
       email: "",
       password: "",
+    },
+  });
+
+  const registerForm = useForm<RegisterData>({
+    resolver: zodResolver(registerSchema),
+    defaultValues: {
+      username: "",
+      email: "",
+      password: "",
+      invitationCode: "",
     },
   });
 
@@ -47,76 +61,242 @@ export default function Login() {
     },
   });
 
-  const onSubmit = (data: LoginCredentials) => {
+  const registerMutation = useMutation({
+    mutationFn: (data: RegisterData) => apiRequest("/api/auth/register", { method: "POST", body: data }),
+    onSuccess: (data) => {
+      toast({
+        title: "Registration successful!",
+        description: data.message || "You can now log in with your credentials",
+      });
+      registerForm.reset();
+      // Switch to login tab
+      const loginTab = document.querySelector('[value="login"]') as HTMLElement;
+      loginTab?.click();
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Registration failed",
+        description: error.message || "Failed to create account",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const onLoginSubmit = (data: LoginCredentials) => {
     loginMutation.mutate(data);
   };
 
+  const onRegisterSubmit = (data: RegisterData) => {
+    registerMutation.mutate(data);
+  };
+
   return (
-    <div className="min-h-screen flex items-center justify-center bg-muted/30 px-4">
+    <div className="min-h-screen flex items-center justify-center bg-background px-4">
       <Card className="w-full max-w-md">
-        <CardHeader className="space-y-1 text-center">
-          <CardTitle className="text-2xl font-bold">Sign In</CardTitle>
-          <CardDescription>
-            Access your inventory management system
+        <CardHeader className="space-y-1">
+          <CardTitle className="text-2xl font-bold text-center">
+            Inventory Management System
+          </CardTitle>
+          <CardDescription className="text-center">
+            Access your inventory management dashboard
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-              <FormField
-                control={form.control}
-                name="email"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Email Address</FormLabel>
-                    <FormControl>
-                      <Input
-                        type="email"
-                        placeholder="admin@inventory.com"
-                        {...field}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+          <Tabs defaultValue="login" className="space-y-4">
+            <TabsList className="grid w-full grid-cols-2">
+              <TabsTrigger value="login" className="flex items-center gap-2">
+                <LogIn className="h-4 w-4" />
+                Login
+              </TabsTrigger>
+              {registrationStatus?.registrationEnabled && (
+                <TabsTrigger value="register" className="flex items-center gap-2">
+                  <UserPlus className="h-4 w-4" />
+                  Register
+                </TabsTrigger>
+              )}
+            </TabsList>
 
-              <FormField
-                control={form.control}
-                name="password"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Password</FormLabel>
-                    <FormControl>
-                      <Input
-                        type="password"
-                        placeholder="••••••••"
-                        {...field}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+            <TabsContent value="login" className="space-y-4">
+              <Form {...loginForm}>
+                <form onSubmit={loginForm.handleSubmit(onLoginSubmit)} className="space-y-4">
+                  <FormField
+                    control={loginForm.control}
+                    name="email"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Email</FormLabel>
+                        <FormControl>
+                          <Input
+                            type="email"
+                            placeholder="Enter your email"
+                            {...field}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={loginForm.control}
+                    name="password"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Password</FormLabel>
+                        <FormControl>
+                          <Input
+                            type="password"
+                            placeholder="Enter your password"
+                            {...field}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <Button
+                    type="submit"
+                    className="w-full"
+                    disabled={loginMutation.isPending}
+                  >
+                    {loginMutation.isPending ? (
+                      <>
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2" />
+                        Signing in...
+                      </>
+                    ) : (
+                      "Sign In"
+                    )}
+                  </Button>
+                </form>
+              </Form>
 
-              <div className="flex items-center justify-between text-sm">
-                <div className="text-muted-foreground">
-                  Demo: admin@inventory.com / password123
-                </div>
-              </div>
+              <Alert>
+                <Info className="h-4 w-4" />
+                <AlertDescription>
+                  <strong>Demo Credentials:</strong><br />
+                  Admin: admin@inventory.com / password123<br />
+                  Manager: manager@inventory.com / manager123<br />
+                  Operator: operator@inventory.com / operator123<br />
+                  Viewer: viewer@inventory.com / viewer123
+                </AlertDescription>
+              </Alert>
+            </TabsContent>
 
-              <Button
-                type="submit"
-                className="w-full"
-                disabled={loginMutation.isPending}
-              >
-                {loginMutation.isPending && (
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                )}
-                Sign In
-              </Button>
-            </form>
-          </Form>
+            {registrationStatus?.registrationEnabled && (
+              <TabsContent value="register" className="space-y-4">
+                <Form {...registerForm}>
+                  <form onSubmit={registerForm.handleSubmit(onRegisterSubmit)} className="space-y-4">
+                    <FormField
+                      control={registerForm.control}
+                      name="username"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Username</FormLabel>
+                          <FormControl>
+                            <Input
+                              placeholder="Enter your username"
+                              {...field}
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={registerForm.control}
+                      name="email"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Email</FormLabel>
+                          <FormControl>
+                            <Input
+                              type="email"
+                              placeholder="Enter your email"
+                              {...field}
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={registerForm.control}
+                      name="password"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Password</FormLabel>
+                          <FormControl>
+                            <Input
+                              type="password"
+                              placeholder="Enter your password (min 6 characters)"
+                              {...field}
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <div className="space-y-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="w-full flex items-center gap-2"
+                        onClick={() => setShowInvitationCode(!showInvitationCode)}
+                      >
+                        <Key className="h-4 w-4" />
+                        {showInvitationCode ? "Hide" : "Have"} Invitation Code?
+                      </Button>
+
+                      {showInvitationCode && (
+                        <FormField
+                          control={registerForm.control}
+                          name="invitationCode"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Invitation Code (Optional)</FormLabel>
+                              <FormControl>
+                                <Input
+                                  placeholder="Enter invitation code"
+                                  {...field}
+                                />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                      )}
+                    </div>
+
+                    <Button
+                      type="submit"
+                      className="w-full"
+                      disabled={registerMutation.isPending}
+                    >
+                      {registerMutation.isPending ? (
+                        <>
+                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2" />
+                          Creating account...
+                        </>
+                      ) : (
+                        "Create Account"
+                      )}
+                    </Button>
+                  </form>
+                </Form>
+
+                <Alert>
+                  <Info className="h-4 w-4" />
+                  <AlertDescription>
+                    <strong>Registration Info:</strong><br />
+                    • Without invitation code: Creates a Viewer account<br />
+                    • With valid invitation code: Higher permission levels<br />
+                    • Contact an admin for invitation codes
+                  </AlertDescription>
+                </Alert>
+              </TabsContent>
+            )}
+          </Tabs>
         </CardContent>
       </Card>
     </div>

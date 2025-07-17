@@ -7,8 +7,12 @@ export const users = pgTable("users", {
   username: text("username").notNull().unique(),
   email: text("email").notNull().unique(),
   password: text("password").notNull(),
+  role: text("role").notNull().default("viewer"), // admin, manager, operator, viewer
+  department: text("department"),
+  isActive: boolean("is_active").notNull().default(true),
   lastLogin: timestamp("last_login"),
   createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
 });
 
 export const assets = pgTable("assets", {
@@ -65,8 +69,17 @@ export const repairs = pgTable("repairs", {
 export const insertUserSchema = createInsertSchema(users).omit({
   id: true,
   createdAt: true,
+  updatedAt: true,
   lastLogin: true,
 });
+
+export const updateUserSchema = createInsertSchema(users).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+  lastLogin: true,
+  password: true,
+}).partial();
 
 export const insertAssetSchema = createInsertSchema(assets).omit({
   id: true,
@@ -97,9 +110,18 @@ export const loginSchema = z.object({
   password: z.string().min(1),
 });
 
+export const registerSchema = z.object({
+  username: z.string().min(2, "Username must be at least 2 characters"),
+  email: z.string().email("Please enter a valid email address"),
+  password: z.string().min(6, "Password must be at least 6 characters"),
+  invitationCode: z.string().optional(),
+});
+
 // Types
 export type InsertUser = z.infer<typeof insertUserSchema>;
+export type UpdateUser = z.infer<typeof updateUserSchema>;
 export type User = typeof users.$inferSelect;
+export type UserRole = "admin" | "manager" | "operator" | "viewer";
 export type InsertAsset = z.infer<typeof insertAssetSchema>;
 export type Asset = typeof assets.$inferSelect;
 export type InsertTransfer = z.infer<typeof insertTransferSchema>;
@@ -107,3 +129,4 @@ export type Transfer = typeof transfers.$inferSelect;
 export type InsertRepair = z.infer<typeof insertRepairSchema>;
 export type Repair = typeof repairs.$inferSelect;
 export type LoginCredentials = z.infer<typeof loginSchema>;
+export type RegisterData = z.infer<typeof registerSchema>;

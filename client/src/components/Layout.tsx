@@ -14,6 +14,7 @@ import {
   Wrench, 
   BarChart3, 
   Settings, 
+  Users,
   Menu,
   ChevronDown,
   LogOut
@@ -29,8 +30,8 @@ const navigation = [
   { name: "All Assets", href: "/assets", icon: Package },
   { name: "Transfer Assets", href: "/transfer", icon: ArrowLeftRight },
   { name: "Repair Tracking", href: "/repair", icon: Wrench },
+  { name: "User Management", href: "/users", icon: Users, adminOnly: true },
   { name: "Reports", href: "/reports", icon: BarChart3 },
-  { name: "Settings", href: "/settings", icon: Settings },
 ];
 
 export default function Layout({ children }: LayoutProps) {
@@ -153,7 +154,15 @@ export default function Layout({ children }: LayoutProps) {
       >
         <div className="p-6">
           <nav className="space-y-2">
-            {navigation.map((item) => {
+            {navigation
+              .filter((item) => {
+                // Show admin-only items only to admins
+                if ('adminOnly' in item && item.adminOnly) {
+                  return data?.user?.role === 'admin';
+                }
+                return true;
+              })
+              .map((item) => {
               const isActive = location === item.href;
               return (
                 <Link key={item.name} href={item.href}>

@@ -10,6 +10,7 @@ import AddAsset from "@/pages/AddAsset";
 import Assets from "@/pages/Assets";
 import Transfer from "@/pages/Transfer";
 import Repair from "@/pages/Repair";
+import UserManagement from "@/pages/UserManagement";
 import NotFound from "@/pages/not-found";
 
 function Router() {
@@ -21,8 +22,8 @@ function Router() {
         <Route path="/assets" component={Assets} />
         <Route path="/transfer" component={Transfer} />
         <Route path="/repair" component={Repair} />
+        <Route path="/users" component={UserManagement} />
         <Route path="/reports" component={() => <div className="p-6"><h1>Reports - Coming Soon</h1></div>} />
-        <Route path="/settings" component={() => <div className="p-6"><h1>Settings - Coming Soon</h1></div>} />
         <Route component={NotFound} />
       </Switch>
     </Layout>

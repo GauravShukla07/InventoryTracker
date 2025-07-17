@@ -1,7 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { insertAssetSchema, insertTransferSchema, insertRepairSchema, loginSchema } from "@shared/schema";
+import { insertAssetSchema, insertTransferSchema, insertRepairSchema, loginSchema, registerSchema, insertUserSchema, updateUserSchema } from "@shared/schema";
 import { ZodError } from "zod";
 
 export async function registerRoutes(app: Express): Promise<Server> {
@@ -125,6 +125,175 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json({ message: "Asset deleted successfully" });
     } catch (error) {
       res.status(500).json({ message: "Failed to delete asset" });
+    }
+  });
+
+  // Registration endpoint
+  app.post("/api/auth/register", async (req, res) => {
+    try {
+      const { username, email, password, invitationCode } = registerSchema.parse(req.body);
+      
+      // Check if registration is enabled
+      const registrationEnabled = await storage.isRegistrationEnabled();
+      if (!registrationEnabled) {
+        return res.status(403).json({ message: "Registration is currently disabled" });
+      }
+
+      // Check if user already exists
+      const existingUser = await storage.getUserByEmail(email);
+      if (existingUser) {
+        return res.status(400).json({ message: "User with this email already exists" });
+      }
+
+      // Validate invitation code if provided
+      if (invitationCode) {
+        const isValidCode = await storage.isValidInvitationCode(invitationCode);
+        if (!isValidCode) {
+          return res.status(400).json({ message: "Invalid invitation code" });
+        }
+      }
+
+      // Determine role based on invitation code or default to viewer
+      let role = "viewer";
+      if (invitationCode === "ADMIN-INVITE-2025") {
+        role = "admin";
+      } else if (invitationCode === "MANAGER-INVITE-2025") {
+        role = "manager";
+      }
+
+      // Create new user
+      const userData = {
+        username,
+        email,
+        password, // In production, this should be hashed
+        role,
+        department: null,
+        isActive: true,
+      };
+
+      const user = await storage.createUser(userData);
+      const { password: _, ...userWithoutPassword } = user;
+      
+      res.status(201).json({ 
+        user: userWithoutPassword,
+        message: "Registration successful! You can now log in with your credentials."
+      });
+    } catch (error) {
+      if (error instanceof ZodError) {
+        return res.status(400).json({ message: "Invalid input", errors: error.errors });
+      }
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  // Check registration status endpoint
+  app.get("/api/auth/registration-status", async (req, res) => {
+    try {
+      const registrationEnabled = await storage.isRegistrationEnabled();
+      res.json({ registrationEnabled });
+    } catch (error) {
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  // User management endpoints
+  app.get("/api/users", requireAuth, async (req, res) => {
+    try {
+      const currentUserId = (req.session as any).userId;
+      const currentUser = await storage.getUser(currentUserId);
+      
+      // Only admins can view all users
+      if (currentUser?.role !== "admin") {
+        return res.status(403).json({ message: "Access denied. Admin privileges required." });
+      }
+
+      const users = await storage.getUsers();
+      const usersWithoutPasswords = users.map(({ password, ...user }) => user);
+      res.json({ users: usersWithoutPasswords });
+    } catch (error) {
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  app.post("/api/users", requireAuth, async (req, res) => {
+    try {
+      const currentUserId = (req.session as any).userId;
+      const currentUser = await storage.getUser(currentUserId);
+      
+      // Only admins can create new users
+      if (currentUser?.role !== "admin") {
+        return res.status(403).json({ message: "Access denied. Admin privileges required." });
+      }
+
+      const userData = insertUserSchema.parse(req.body);
+      const user = await storage.createUser(userData);
+      const { password, ...userWithoutPassword } = user;
+      res.status(201).json({ user: userWithoutPassword });
+    } catch (error) {
+      if (error instanceof ZodError) {
+        return res.status(400).json({ message: "Invalid input", errors: error.errors });
+      }
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  app.patch("/api/users/:id", requireAuth, async (req, res) => {
+    try {
+      const currentUserId = (req.session as any).userId;
+      const currentUser = await storage.getUser(currentUserId);
+      const targetUserId = parseInt(req.params.id);
+      
+      // Admin can update any user, users can update their own profile (except role)
+      if (currentUser?.role !== "admin" && currentUserId !== targetUserId) {
+        return res.status(403).json({ message: "Access denied." });
+      }
+
+      let updateData = updateUserSchema.parse(req.body);
+      
+      // Non-admins cannot change roles
+      if (currentUser?.role !== "admin" && updateData.role) {
+        delete updateData.role;
+      }
+
+      const updatedUser = await storage.updateUser(targetUserId, updateData);
+      if (!updatedUser) {
+        return res.status(404).json({ message: "User not found" });
+      }
+
+      const { password, ...userWithoutPassword } = updatedUser;
+      res.json({ user: userWithoutPassword });
+    } catch (error) {
+      if (error instanceof ZodError) {
+        return res.status(400).json({ message: "Invalid input", errors: error.errors });
+      }
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  app.delete("/api/users/:id", requireAuth, async (req, res) => {
+    try {
+      const currentUserId = (req.session as any).userId;
+      const currentUser = await storage.getUser(currentUserId);
+      const targetUserId = parseInt(req.params.id);
+      
+      // Only admins can delete users
+      if (currentUser?.role !== "admin") {
+        return res.status(403).json({ message: "Access denied. Admin privileges required." });
+      }
+
+      // Cannot delete yourself
+      if (currentUserId === targetUserId) {
+        return res.status(400).json({ message: "Cannot delete your own account" });
+      }
+
+      const deleted = await storage.deleteUser(targetUserId);
+      if (!deleted) {
+        return res.status(404).json({ message: "User not found" });
+      }
+
+      res.json({ message: "User deleted successfully" });
+    } catch (error) {
+      res.status(500).json({ message: "Internal server error" });
     }
   });
 
