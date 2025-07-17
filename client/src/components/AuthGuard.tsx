@@ -1,17 +1,27 @@
 import { useQuery } from "@tanstack/react-query";
+import { useLocation } from "wouter";
 import { authApi } from "@/lib/auth";
-import Login from "@/pages/Login";
+import { useEffect } from "react";
 
 interface AuthGuardProps {
   children: React.ReactNode;
 }
 
 export default function AuthGuard({ children }: AuthGuardProps) {
+  const [location, setLocation] = useLocation();
   const { data, isLoading, error } = useQuery({
     queryKey: ["/api/auth/me"],
     queryFn: authApi.me,
     retry: false,
+    refetchOnWindowFocus: false,
   });
+
+  // Redirect to login if not authenticated
+  useEffect(() => {
+    if ((error || !data?.user) && !isLoading) {
+      setLocation("/login");
+    }
+  }, [error, data?.user, isLoading, setLocation]);
 
   if (isLoading) {
     return (
@@ -22,7 +32,7 @@ export default function AuthGuard({ children }: AuthGuardProps) {
   }
 
   if (error || !data?.user) {
-    return <Login />;
+    return null; // Will redirect via useEffect
   }
 
   return <>{children}</>;

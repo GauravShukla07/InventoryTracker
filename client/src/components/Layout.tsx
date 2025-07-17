@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link, useLocation } from "wouter";
+import { Link, useLocation, useRouter } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { authApi } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
@@ -37,6 +37,7 @@ const navigation = [
 export default function Layout({ children }: LayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [location] = useLocation();
+  const router = useRouter();
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -53,6 +54,8 @@ export default function Layout({ children }: LayoutProps) {
         title: "Logged out successfully",
         description: "You have been signed out of your account",
       });
+      // Redirect to login page after successful logout
+      router("/login");
     },
     onError: () => {
       toast({

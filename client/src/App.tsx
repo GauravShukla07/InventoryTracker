@@ -11,22 +11,30 @@ import Assets from "@/pages/Assets";
 import Transfer from "@/pages/Transfer";
 import Repair from "@/pages/Repair";
 import UserManagement from "@/pages/UserManagement";
+import Login from "@/pages/Login";
 import NotFound from "@/pages/not-found";
 
 function Router() {
   return (
-    <Layout>
-      <Switch>
-        <Route path="/" component={Dashboard} />
-        <Route path="/add-asset" component={AddAsset} />
-        <Route path="/assets" component={Assets} />
-        <Route path="/transfer" component={Transfer} />
-        <Route path="/repair" component={Repair} />
-        <Route path="/users" component={UserManagement} />
-        <Route path="/reports" component={() => <div className="p-6"><h1>Reports - Coming Soon</h1></div>} />
-        <Route component={NotFound} />
-      </Switch>
-    </Layout>
+    <Switch>
+      <Route path="/login" component={Login} />
+      <Route path="*">
+        <AuthGuard>
+          <Layout>
+            <Switch>
+              <Route path="/" component={Dashboard} />
+              <Route path="/add-asset" component={AddAsset} />
+              <Route path="/assets" component={Assets} />
+              <Route path="/transfer" component={Transfer} />
+              <Route path="/repair" component={Repair} />
+              <Route path="/users" component={UserManagement} />
+              <Route path="/reports" component={() => <div className="p-6"><h1>Reports - Coming Soon</h1></div>} />
+              <Route component={NotFound} />
+            </Switch>
+          </Layout>
+        </AuthGuard>
+      </Route>
+    </Switch>
   );
 }
 
@@ -35,9 +43,7 @@ function App() {
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
         <Toaster />
-        <AuthGuard>
-          <Router />
-        </AuthGuard>
+        <Router />
       </TooltipProvider>
     </QueryClientProvider>
   );
