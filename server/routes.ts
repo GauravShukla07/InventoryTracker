@@ -10,27 +10,15 @@ const tokenStore = new Map<string, number>();
 export async function registerRoutes(app: Express): Promise<Server> {
   // Authentication middleware - proper implementation
   const requireAuth = (req: any, res: any, next: any) => {
-    const sessionUserId = (req.session as any)?.userId;
+    const sessionUserId = req.session?.userId;
     const authToken = req.cookies?.authToken || req.headers['authorization']?.replace('Bearer ', '');
     const tokenUserId = authToken ? tokenStore.get(authToken) : null;
     
-    // Debug authentication
-    console.log('Auth check:', {
-      sessionId: req.sessionID,
-      sessionUserId,
-      authToken,
-      tokenUserId,
-      cookies: req.cookies,
-      headers: req.headers.cookie
-    });
-    
     if (!sessionUserId && !tokenUserId) {
-      console.log('Authentication failed - no valid session or token');
       return res.status(401).json({ message: "Authentication required" });
     }
     
     (req as any).userId = sessionUserId || tokenUserId;
-    console.log('Authentication successful, userId:', (req as any).userId);
     next();
   };
 
@@ -46,18 +34,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       await storage.updateUserLastLogin(user.id);
       
-      // Use both session and simple token approach
-      (req.session as any).userId = user.id;
+      // Set userId in session and save it
+      req.session.userId = user.id;
       
       // Generate simple token and store in memory
       const token = `token_${user.id}_${Date.now()}`;
       tokenStore.set(token, user.id);
       
-      console.log('Login successful:', {
-        sessionId: req.sessionID,
-        userId: user.id,
-        token: token
+      // Force session save
+      await new Promise<void>((resolve, reject) => {
+        req.session.save((err) => {
+          if (err) {
+            console.error('Session save error:', err);
+            reject(err);
+          } else {
+            resolve();
+          }
+        });
       });
+      
+
       
       const { password: _, ...userWithoutPassword } = user;
       res.cookie('authToken', token, { 
