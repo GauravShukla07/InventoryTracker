@@ -7,6 +7,13 @@ import { ZodError } from "zod";
 export async function registerRoutes(app: Express): Promise<Server> {
   // Authentication middleware
   const requireAuth = (req: any, res: any, next: any) => {
+    console.log('Session check:', {
+      sessionId: req.sessionID,
+      userId: (req.session as any)?.userId,
+      hasSession: !!req.session,
+      sessionData: req.session
+    });
+    
     if (!(req.session as any)?.userId) {
       return res.status(401).json({ message: "Authentication required" });
     }
@@ -26,8 +33,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
       await storage.updateUserLastLogin(user.id);
       (req.session as any).userId = user.id;
       
-      const { password: _, ...userWithoutPassword } = user;
-      res.json({ user: userWithoutPassword });
+      // Save the session explicitly
+      req.session.save((err: any) => {
+        if (err) {
+          console.error('Session save error:', err);
+          return res.status(500).json({ message: "Session save failed" });
+        }
+        
+        console.log('Login successful, session saved:', {
+          sessionId: req.sessionID,
+          userId: user.id
+        });
+        
+        const { password: _, ...userWithoutPassword } = user;
+        res.json({ user: userWithoutPassword });
+      });
     } catch (error) {
       if (error instanceof ZodError) {
         return res.status(400).json({ message: "Invalid input", errors: error.errors });
