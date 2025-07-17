@@ -47,20 +47,35 @@ export default function Login() {
 
   const loginMutation = useMutation({
     mutationFn: authApi.login,
-    onSuccess: (data) => {
-      // Invalidate and refetch auth queries to trigger re-render
-      queryClient.invalidateQueries({ queryKey: ["/api/auth/me"] });
+    onSuccess: async (data) => {
+      // Set the auth data in cache immediately
       queryClient.setQueryData(["/api/auth/me"], data);
       
-      toast({
-        title: "Welcome back!",
-        description: "You have been successfully logged in",
-      });
+      // Wait a bit longer for cookies to be set, then verify authentication
+      await new Promise(resolve => setTimeout(resolve, 200));
       
-      // Force a small delay then redirect to ensure auth state is updated
-      setTimeout(() => {
+      try {
+        // Verify authentication works by making a test call
+        await authApi.me();
+        
+        toast({
+          title: "Welcome back!",
+          description: "You have been successfully logged in",
+        });
+        
+        // Invalidate all queries to refresh data
+        queryClient.invalidateQueries();
+        
+        // Redirect to dashboard
         setLocation("/");
-      }, 100);
+      } catch (error) {
+        // If verification fails, show error but don't redirect
+        toast({
+          title: "Authentication issue",
+          description: "Login succeeded but authentication verification failed. Please try refreshing the page.",
+          variant: "destructive",
+        });
+      }
     },
     onError: (error: any) => {
       toast({

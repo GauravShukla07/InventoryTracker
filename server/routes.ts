@@ -14,7 +14,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const authToken = req.cookies?.authToken || req.headers['authorization']?.replace('Bearer ', '');
     const tokenUserId = authToken ? tokenStore.get(authToken) : null;
     
+    // Temporary debugging
     if (!sessionUserId && !tokenUserId) {
+      console.log('Auth failed - Debug info:', {
+        sessionId: req.sessionID,
+        sessionUserId,
+        authToken,
+        tokenUserId,
+        cookies: req.cookies,
+        session: req.session,
+        tokenStoreSize: tokenStore.size,
+        allTokens: Array.from(tokenStore.keys())
+      });
       return res.status(401).json({ message: "Authentication required" });
     }
     
