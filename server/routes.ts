@@ -11,21 +11,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Authentication middleware - proper implementation
   const requireAuth = (req: any, res: any, next: any) => {
     const sessionUserId = req.session?.userId;
-    const authToken = req.cookies?.authToken || req.headers['authorization']?.replace('Bearer ', '');
+    
+    // Check for token in multiple places: Authorization header, cookies, or direct header
+    let authToken = req.cookies?.authToken;
+    if (!authToken && req.headers['authorization']) {
+      authToken = req.headers['authorization'].replace('Bearer ', '');
+    }
+    
     const tokenUserId = authToken ? tokenStore.get(authToken) : null;
     
-    // Temporary debugging
     if (!sessionUserId && !tokenUserId) {
-      console.log('Auth failed - Debug info:', {
-        sessionId: req.sessionID,
-        sessionUserId,
-        authToken,
-        tokenUserId,
-        cookies: req.cookies,
-        session: req.session,
-        tokenStoreSize: tokenStore.size,
-        allTokens: Array.from(tokenStore.keys())
-      });
       return res.status(401).json({ message: "Authentication required" });
     }
     
