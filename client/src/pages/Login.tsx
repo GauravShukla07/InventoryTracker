@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { useRouter } from "wouter";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -17,6 +18,7 @@ import { UserPlus, LogIn, Key, Info } from "lucide-react";
 export default function Login() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const router = useRouter();
   const [showInvitationCode, setShowInvitationCode] = useState(false);
 
   // Check if registration is enabled
@@ -51,6 +53,8 @@ export default function Login() {
         title: "Welcome back!",
         description: "You have been successfully logged in",
       });
+      // Redirect to dashboard after successful login
+      router("/");
     },
     onError: (error: any) => {
       toast({

@@ -9,11 +9,12 @@ interface AuthGuardProps {
 
 export default function AuthGuard({ children }: AuthGuardProps) {
   const [location, setLocation] = useLocation();
-  const { data, isLoading, error } = useQuery({
+  const { data, isLoading, error, refetch } = useQuery({
     queryKey: ["/api/auth/me"],
     queryFn: authApi.me,
     retry: false,
-    refetchOnWindowFocus: false,
+    refetchOnWindowFocus: true,
+    refetchInterval: 5000, // Check auth status every 5 seconds
   });
 
   // Redirect to login if not authenticated
@@ -22,6 +23,13 @@ export default function AuthGuard({ children }: AuthGuardProps) {
       setLocation("/login");
     }
   }, [error, data?.user, isLoading, setLocation]);
+
+  // Force refetch when coming from login page
+  useEffect(() => {
+    if (location === "/") {
+      refetch();
+    }
+  }, [location, refetch]);
 
   if (isLoading) {
     return (
