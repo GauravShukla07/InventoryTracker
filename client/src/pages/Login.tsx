@@ -108,12 +108,10 @@ export default function Login() {
                 <LogIn className="h-4 w-4" />
                 Login
               </TabsTrigger>
-              {registrationStatus?.registrationEnabled && (
-                <TabsTrigger value="register" className="flex items-center gap-2">
-                  <UserPlus className="h-4 w-4" />
-                  Register
-                </TabsTrigger>
-              )}
+              <TabsTrigger value="register" className="flex items-center gap-2">
+                <UserPlus className="h-4 w-4" />
+                Register
+              </TabsTrigger>
             </TabsList>
 
             <TabsContent value="login" className="space-y-4">
@@ -182,8 +180,7 @@ export default function Login() {
               </Alert>
             </TabsContent>
 
-            {registrationStatus?.registrationEnabled && (
-              <TabsContent value="register" className="space-y-4">
+            <TabsContent value="register" className="space-y-4">
                 <Form {...registerForm}>
                   <form onSubmit={registerForm.handleSubmit(onRegisterSubmit)} className="space-y-4">
                     <FormField
@@ -295,7 +292,6 @@ export default function Login() {
                   </AlertDescription>
                 </Alert>
               </TabsContent>
-            )}
           </Tabs>
         </CardContent>
       </Card>
