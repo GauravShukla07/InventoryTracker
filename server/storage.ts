@@ -453,4 +453,19 @@ export class DatabaseStorage implements IStorage {
   }
 }
 
-export const storage = new DatabaseStorage();
+// Choose storage implementation based on environment
+// Set SQL_SERVER=true in environment to use SQL Server instead of PostgreSQL
+let storage: IStorage;
+
+if (process.env.SQL_SERVER === 'true') {
+  // Use SQL Server storage
+  const { SqlServerStorage } = require('./sqlserver-storage');
+  storage = new SqlServerStorage();
+  console.log('Using SQL Server storage implementation');
+} else {
+  // Use PostgreSQL storage (default)
+  storage = new DatabaseStorage();
+  console.log('Using PostgreSQL storage implementation');
+}
+
+export { storage };

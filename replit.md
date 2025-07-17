@@ -136,3 +136,8 @@ Preferred communication style: Simple, everyday language.
 - ✓ Created DatabaseStorage class for all data operations
 - ✓ Set up demo users with different role permissions
 - ✓ Successfully migrated schema with `npm run db:push`
+- ✓ **Added SQL Server support** - Converted Python pyodbc connection to Node.js
+- ✓ Created SqlServerStorage class for SQL Server InventoryDB
+- ✓ Added dual database support (PostgreSQL/SQL Server) via environment variable
+- ✓ Fixed authentication issues and added 17 diverse dummy assets
+- ✓ Restored proper session-based authentication with token fallback

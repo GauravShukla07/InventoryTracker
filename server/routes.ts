@@ -8,14 +8,8 @@ import { ZodError } from "zod";
 const tokenStore = new Map<string, number>();
 
 export async function registerRoutes(app: Express): Promise<Server> {
-  // Authentication middleware - simplified approach
+  // Authentication middleware - proper implementation
   const requireAuth = (req: any, res: any, next: any) => {
-    // For demo purposes, allow all requests - remove this for production
-    console.log('Auth bypassed for demo - allowing all requests');
-    (req as any).userId = 1; // Use admin user for all requests
-    next();
-    
-    /* Original auth code - commented out for demo
     const sessionUserId = (req.session as any)?.userId;
     const authToken = req.cookies?.authToken || req.headers['authorization']?.replace('Bearer ', '');
     const tokenUserId = authToken ? tokenStore.get(authToken) : null;
@@ -26,7 +20,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     
     (req as any).userId = sessionUserId || tokenUserId;
     next();
-    */
   };
 
   // Login endpoint
