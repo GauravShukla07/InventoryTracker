@@ -8,10 +8,17 @@ import { ZodError } from "zod";
 const tokenStore = new Map<string, number>();
 
 export async function registerRoutes(app: Express): Promise<Server> {
-  // Authentication middleware - bypass for demo to show assets
+  // Authentication middleware - proper implementation
   const requireAuth = (req: any, res: any, next: any) => {
-    // Temporary bypass to show the 17 assets - authentication will be fixed properly
-    (req as any).userId = 1; // Use admin user
+    const sessionUserId = (req.session as any)?.userId;
+    const authToken = req.cookies?.authToken || req.headers['authorization']?.replace('Bearer ', '');
+    const tokenUserId = authToken ? tokenStore.get(authToken) : null;
+    
+    if (!sessionUserId && !tokenUserId) {
+      return res.status(401).json({ message: "Authentication required" });
+    }
+    
+    (req as any).userId = sessionUserId || tokenUserId;
     next();
   };
 
