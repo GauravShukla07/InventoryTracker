@@ -14,11 +14,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const authToken = req.cookies?.authToken || req.headers['authorization']?.replace('Bearer ', '');
     const tokenUserId = authToken ? tokenStore.get(authToken) : null;
     
+    // Debug authentication
+    console.log('Auth check:', {
+      sessionId: req.sessionID,
+      sessionUserId,
+      authToken,
+      tokenUserId,
+      cookies: req.cookies,
+      headers: req.headers.cookie
+    });
+    
     if (!sessionUserId && !tokenUserId) {
+      console.log('Authentication failed - no valid session or token');
       return res.status(401).json({ message: "Authentication required" });
     }
     
     (req as any).userId = sessionUserId || tokenUserId;
+    console.log('Authentication successful, userId:', (req as any).userId);
     next();
   };
 
@@ -51,7 +63,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.cookie('authToken', token, { 
         httpOnly: false, 
         maxAge: 24 * 60 * 60 * 1000,
-        sameSite: 'none',
+        sameSite: 'lax',
         secure: false 
       });
       res.json({ user: userWithoutPassword, token });

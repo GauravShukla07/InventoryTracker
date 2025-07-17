@@ -15,9 +15,14 @@ const app = express();
 // Enable CORS for credentials
 app.use((req, res, next) => {
   res.header('Access-Control-Allow-Credentials', 'true');
-  res.header('Access-Control-Allow-Origin', req.headers.origin);
+  res.header('Access-Control-Allow-Origin', req.headers.origin || '*');
   res.header('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS');
   res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, Content-Length, X-Requested-With');
+  
+  // Handle preflight requests
+  if (req.method === 'OPTIONS') {
+    return res.sendStatus(200);
+  }
   next();
 });
 
@@ -53,7 +58,7 @@ app.use(session({
     secure: false,
     httpOnly: false, // Allow client-side access for debugging
     maxAge: 24 * 60 * 60 * 1000,
-    sameSite: 'none', // Required for cross-origin requests
+    sameSite: 'lax', // Changed from 'none' to 'lax' for same-origin requests
     domain: undefined,
     path: '/'
   },
