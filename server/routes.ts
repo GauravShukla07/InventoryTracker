@@ -7,7 +7,7 @@ import { ZodError } from "zod";
 export async function registerRoutes(app: Express): Promise<Server> {
   // Authentication middleware
   const requireAuth = (req: any, res: any, next: any) => {
-    if (!req.session?.userId) {
+    if (!(req.session as any)?.userId) {
       return res.status(401).json({ message: "Authentication required" });
     }
     next();
@@ -24,7 +24,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       await storage.updateUserLastLogin(user.id);
-      req.session.userId = user.id;
+      (req.session as any).userId = user.id;
       
       const { password: _, ...userWithoutPassword } = user;
       res.json({ user: userWithoutPassword });
@@ -49,7 +49,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Get current user
   app.get("/api/auth/me", requireAuth, async (req, res) => {
     try {
-      const user = await storage.getUser(req.session.userId);
+      const userId = (req.session as any).userId;
+      const user = await storage.getUser(userId);
       if (!user) {
         return res.status(404).json({ message: "User not found" });
       }
