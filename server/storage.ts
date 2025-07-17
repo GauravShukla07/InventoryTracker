@@ -115,6 +115,84 @@ export class MemStorage implements IStorage {
     });
 
     this.currentUserId = 5;
+
+    // Create sample assets
+    const sampleAssets = [
+      {
+        id: 1,
+        voucherNo: "VCH-2023-001",
+        date: new Date("2023-01-15"),
+        donor: "Purchase - Dell Technologies",
+        currentLocation: "Office Floor 1 - IT Department",
+        lostQuantity: 0,
+        lostAmount: "0.00",
+        handoverPerson: "John Smith",
+        handoverOrganization: "IT Department",
+        transferRecipient: null,
+        transferLocation: null,
+        isDonated: false,
+        projectName: "Laptop Modernization Project",
+        isInsured: true,
+        policyNumber: "INS-2023-001",
+        warranty: "3 Years Manufacturer Warranty",
+        warrantyValidity: new Date("2026-01-15"),
+        grn: "GRN-2023-001",
+        status: "active",
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      },
+      {
+        id: 2,
+        voucherNo: "VCH-2023-002",
+        date: new Date("2023-03-20"),
+        donor: "Purchase - Samsung Electronics",
+        currentLocation: "Office Floor 2 - Design Department",
+        lostQuantity: 0,
+        lostAmount: "0.00",
+        handoverPerson: "Sarah Johnson",
+        handoverOrganization: "Design Department",
+        transferRecipient: null,
+        transferLocation: null,
+        isDonated: false,
+        projectName: "Display Enhancement Project",
+        isInsured: true,
+        policyNumber: "INS-2023-002",
+        warranty: "3 Years Manufacturer Warranty",
+        warrantyValidity: new Date("2026-03-20"),
+        grn: "GRN-2023-002",
+        status: "active",
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      },
+      {
+        id: 3,
+        voucherNo: "VCH-2023-003",
+        date: new Date("2023-06-10"),
+        donor: "Purchase - HP Inc.",
+        currentLocation: "Shared Resources - IT Department",
+        lostQuantity: 0,
+        lostAmount: "0.00",
+        handoverPerson: "IT Department",
+        handoverOrganization: "IT Department",
+        transferRecipient: null,
+        transferLocation: null,
+        isDonated: false,
+        projectName: "Office Equipment Upgrade",
+        isInsured: true,
+        policyNumber: "INS-2023-003",
+        warranty: "2 Years Manufacturer Warranty",
+        warrantyValidity: new Date("2025-06-10"),
+        grn: "GRN-2023-003",
+        status: "active",
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      }
+    ];
+
+    sampleAssets.forEach(asset => {
+      this.assets.set(asset.id, asset as Asset);
+    });
+    this.currentAssetId = 4;
   }
 
   // User methods
