@@ -49,7 +49,10 @@ export default function Layout({ children }: LayoutProps) {
   const logoutMutation = useMutation({
     mutationFn: authApi.logout,
     onSuccess: () => {
+      // Clear all cached data
       queryClient.clear();
+      // Remove auth token cookie
+      document.cookie = 'authToken=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;';
       toast({
         title: "Logged out successfully",
         description: "You have been signed out of your account",
