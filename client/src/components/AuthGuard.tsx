@@ -14,22 +14,23 @@ export default function AuthGuard({ children }: AuthGuardProps) {
     queryFn: authApi.me,
     retry: false,
     refetchOnWindowFocus: true,
-    refetchInterval: 5000, // Check auth status every 5 seconds
+    staleTime: 0, // Always consider data stale to force fresh checks
+    gcTime: 0, // Don't cache auth data
   });
 
   // Redirect to login if not authenticated
   useEffect(() => {
-    if ((error || !data?.user) && !isLoading) {
+    if ((error || !data?.user) && !isLoading && location !== "/login") {
       setLocation("/login");
     }
-  }, [error, data?.user, isLoading, setLocation]);
+  }, [error, data?.user, isLoading, location, setLocation]);
 
-  // Force refetch when coming from login page
+  // If we have user data and we're on login page, redirect to dashboard
   useEffect(() => {
-    if (location === "/") {
-      refetch();
+    if (data?.user && location === "/login") {
+      setLocation("/");
     }
-  }, [location, refetch]);
+  }, [data?.user, location, setLocation]);
 
   if (isLoading) {
     return (

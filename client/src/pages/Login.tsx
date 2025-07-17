@@ -48,13 +48,19 @@ export default function Login() {
   const loginMutation = useMutation({
     mutationFn: authApi.login,
     onSuccess: (data) => {
+      // Invalidate and refetch auth queries to trigger re-render
+      queryClient.invalidateQueries({ queryKey: ["/api/auth/me"] });
       queryClient.setQueryData(["/api/auth/me"], data);
+      
       toast({
         title: "Welcome back!",
         description: "You have been successfully logged in",
       });
-      // Redirect to dashboard after successful login
-      router("/");
+      
+      // Force a small delay then redirect to ensure auth state is updated
+      setTimeout(() => {
+        router("/");
+      }, 100);
     },
     onError: (error: any) => {
       toast({
