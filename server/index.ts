@@ -1,7 +1,6 @@
 import express, { type Request, Response, NextFunction } from "express";
 import session from "express-session";
-import connectPgSimple from "connect-pg-simple";
-import { pool } from "./db";
+import MemoryStore from "memorystore";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 
@@ -16,24 +15,24 @@ const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 
-// Configure session store with PostgreSQL
-const PgSession = connectPgSimple(session);
+// Configure session store with memory store
+const MemStore = MemoryStore(session);
 
 // Configure session middleware
 app.use(session({
-  store: new PgSession({
-    pool: pool,
-    tableName: 'session',
-    createTableIfMissing: true,
+  store: new MemStore({
+    checkPeriod: 86400000 // prune expired entries every 24h
   }),
   secret: process.env.SESSION_SECRET || 'inventory-management-secret-key-for-development',
   resave: false,
   saveUninitialized: false,
   cookie: {
-    secure: false, // Set to true in production with HTTPS
+    secure: false,
     httpOnly: true,
-    maxAge: 24 * 60 * 60 * 1000 // 24 hours
-  }
+    maxAge: 24 * 60 * 60 * 1000,
+    sameSite: 'lax'
+  },
+  name: 'connect.sid'
 }));
 
 app.use((req, res, next) => {
