@@ -1,0 +1,61 @@
+# Set the default README file for GitHub
+replit.md text=markdown
+
+# Ensure consistent line endings across platforms
+* text=auto
+
+# Markdown files
+*.md text eol=lf
+
+# JavaScript and TypeScript files
+*.js text eol=lf
+*.jsx text eol=lf
+*.ts text eol=lf
+*.tsx text eol=lf
+*.json text eol=lf
+
+# CSS and related files
+*.css text eol=lf
+*.scss text eol=lf
+*.less text eol=lf
+
+# HTML files
+*.html text eol=lf
+
+# Configuration files
+*.yml text eol=lf
+*.yaml text eol=lf
+*.toml text eol=lf
+*.ini text eol=lf
+
+# Shell scripts
+*.sh text eol=lf
+
+# Ensure binary files are handled correctly
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.svg text eol=lf
+*.woff binary
+*.woff2 binary
+*.ttf binary
+*.eot binary
+
+# Node.js specific
+package.json text eol=lf
+package-lock.json text eol=lf
+yarn.lock text eol=lf
+
+# Documentation and deployment files
+*.md text eol=lf linguist-documentation
+DEPLOYMENT.md text eol=lf linguist-documentation
+DEPLOYMENT_CHECKLIST.md text eol=lf linguist-documentation
+Procfile text eol=lf
+render.yaml text eol=lf
+
+# Ignore generated files from language statistics
+dist/** linguist-generated
+build/** linguist-generated
+coverage/** linguist-generated
