@@ -2,7 +2,7 @@
 
 ## Overview
 
-This is a full-stack asset management system built with React (frontend) and Express.js (backend). The application allows users to track, transfer, and manage organizational assets with features for repairs, warranties, and comprehensive reporting. It uses a modern tech stack with TypeScript, shadcn/ui components, Drizzle ORM, and PostgreSQL.
+This is a full-stack asset management system built with React (frontend) and Express.js (backend). The application allows users to track, transfer, and manage organizational assets with features for role-based access control, repair tracking, and comprehensive reporting.
 
 ## User Preferences
 
@@ -11,133 +11,126 @@ Preferred communication style: Simple, everyday language.
 ## System Architecture
 
 ### Frontend Architecture
-- **Framework**: React 18 with TypeScript
-- **Routing**: Wouter for client-side routing
-- **State Management**: TanStack Query (React Query) for server state management
-- **UI Framework**: shadcn/ui components built on Radix UI primitives
-- **Styling**: Tailwind CSS with CSS variables for theming
-- **Form Handling**: React Hook Form with Zod validation
-- **Build Tool**: Vite with TypeScript support
+- **Framework**: React 18 with TypeScript for type safety and modern React features
+- **Routing**: Wouter for lightweight client-side routing
+- **State Management**: TanStack Query (React Query) for server state management and caching
+- **UI Framework**: shadcn/ui components built on Radix UI primitives for accessible, customizable components
+- **Styling**: Tailwind CSS with CSS variables for theming and responsive design
+- **Form Handling**: React Hook Form with Zod validation for type-safe form management
+- **Build Tool**: Vite with TypeScript support for fast development and optimized builds
 
 ### Backend Architecture
-- **Framework**: Express.js with TypeScript
-- **Database**: PostgreSQL with Drizzle ORM and Neon serverless adapter
-- **Session Management**: Express sessions with PostgreSQL store
-- **API Design**: RESTful API with JSON responses
-- **Storage**: Database-backed storage implementation (DatabaseStorage)
-- **Development**: Hot reload with Vite integration in development mode
+- **Framework**: Express.js with TypeScript for type-safe server development
+- **Database**: PostgreSQL with Drizzle ORM and Neon serverless adapter for scalable data management
+- **Session Management**: Express sessions with PostgreSQL store for persistent authentication
+- **API Design**: RESTful API with JSON responses and proper HTTP status codes
+- **Authentication**: Session-based authentication with token fallback for multi-device support
+- **Development**: Hot reload with Vite integration for seamless development experience
 
-### Project Structure
-```
-├── client/           # React frontend
-├── server/           # Express backend
-├── shared/           # Shared types and schemas
-├── migrations/       # Database migrations
-└── dist/            # Production build output
-```
+### Database Design
+- **Primary Database**: PostgreSQL with Drizzle ORM for type-safe database operations
+- **Schema Management**: Drizzle Kit for database migrations and schema synchronization
+- **Connection**: Neon serverless adapter for scalable PostgreSQL connections
+- **Alternative Support**: SQL Server integration available (configured but not primary)
 
 ## Key Components
 
-### Database Schema (shared/schema.ts)
-- **Users**: Authentication, roles, and user management with PostgreSQL storage
-- **Assets**: Core asset tracking with detailed metadata and full database persistence
-- **Transfers**: Asset transfer history and tracking stored in database
-- **Repairs**: Repair tracking and status management with database persistence
-- **Relations**: Proper foreign key relationships between tables
+### Database Schema
+- **Users**: Role-based user management (admin, manager, operator, viewer) with authentication data
+- **Assets**: Core asset tracking with comprehensive metadata including voucher numbers, locations, donors, and status
+- **Transfers**: Asset transfer history with detailed audit trail and location tracking
+- **Repairs**: Repair tracking system with status management and expected return dates
+- **Relations**: Proper foreign key relationships ensuring data integrity
 
 ### Authentication System
-- Session-based authentication using Express sessions
-- Protected routes with authentication middleware
-- User login/logout functionality with automatic session management
+- **Primary**: Session-based authentication using Express sessions stored in PostgreSQL
+- **Fallback**: Token-based authentication stored in localStorage for reliability
+- **Authorization**: Role-based access control with different permission levels
+- **Registration**: Configurable registration with invitation code system
 
-### Asset Management Features
-- Asset creation with comprehensive metadata
-- Transfer tracking between locations and custodians
-- Repair status monitoring with expected return dates
-- Warranty and insurance tracking
-- Loss and damage recording
-
-### UI Components
-- Responsive design with mobile support
-- Consistent component library using shadcn/ui
-- Form validation with real-time feedback
-- Toast notifications for user feedback
-- Loading states and error handling
+### User Interface
+- **Dashboard**: Overview with key metrics and statistics
+- **Asset Management**: Add, view, edit, and delete assets with comprehensive forms
+- **Transfer System**: Asset transfer workflow with location and custodian tracking
+- **Repair Tracking**: Send assets for repair and track repair status
+- **User Management**: Admin interface for managing users and roles (admin only)
 
 ## Data Flow
 
-1. **Client Requests**: React components make API calls using TanStack Query
-2. **Authentication**: Middleware validates session before accessing protected routes
-3. **Data Processing**: Express routes handle business logic and data validation
-4. **Database Operations**: Drizzle ORM manages PostgreSQL interactions
-5. **Response Handling**: JSON responses with appropriate status codes
-6. **State Updates**: TanStack Query automatically updates UI with fresh data
+1. **Authentication Flow**: Users log in via session-based auth with token fallback
+2. **Asset Lifecycle**: Assets are created → can be transferred → may go for repair → return to active status
+3. **Permission Model**: Role-based permissions control access to different features
+4. **State Management**: TanStack Query handles server state with automatic caching and revalidation
 
 ## External Dependencies
 
-### Frontend Dependencies
-- **@tanstack/react-query**: Server state management and caching
-- **wouter**: Lightweight client-side routing
-- **react-hook-form**: Form handling and validation
-- **@hookform/resolvers**: Zod integration for form validation
-- **date-fns**: Date manipulation and formatting
-- **lucide-react**: Icon library
-
-### Backend Dependencies
-- **drizzle-orm**: TypeScript ORM for PostgreSQL
-- **@neondatabase/serverless**: Neon PostgreSQL adapter
-- **express-session**: Session management
-- **connect-pg-simple**: PostgreSQL session store
-- **zod**: Runtime type validation
+### Production Dependencies
+- **Database**: `@neondatabase/serverless`, `drizzle-orm` for PostgreSQL connectivity
+- **Authentication**: `express-session`, `connect-pg-simple` for session management
+- **Validation**: `zod` for runtime type validation
+- **UI Components**: Full Radix UI ecosystem for accessible components
+- **Forms**: `react-hook-form` with `@hookform/resolvers` for form handling
 
 ### Development Dependencies
-- **drizzle-kit**: Database migration and introspection tools
-- **tsx**: TypeScript execution for development
-- **esbuild**: Fast JavaScript bundler for production
+- **Build Tools**: `vite`, `typescript`, `tsx` for development and build process
+- **Database Tools**: `drizzle-kit` for schema management and migrations
+- **Styling**: `tailwindcss`, `autoprefixer` for CSS processing
 
 ## Deployment Strategy
 
-### Development Mode
-- Vite dev server with hot reload for frontend
-- tsx with nodemon-like behavior for backend
-- Integrated development setup with proxy configuration
+### Environment Configuration
+- **Required Environment Variables**: `DATABASE_URL`, `SESSION_SECRET`, `NODE_ENV`
+- **Optional Variables**: `PORT` (defaults to 5000), `SQL_SERVER` for alternative database
 
-### Production Build
-1. **Frontend**: Vite builds optimized React bundle to `dist/public`
-2. **Backend**: esbuild bundles Express server to `dist/index.js`
-3. **Database**: Drizzle migrations ensure schema consistency
-4. **Environment**: Production mode serves static files and API from single process
+### Build Process
+1. **Frontend Build**: Vite builds React app to `dist/public`
+2. **Backend Build**: esbuild bundles server code to `dist/index.js`
+3. **Database Setup**: Drizzle pushes schema to database
+4. **Production Start**: Node.js serves built application
 
-### Database Management
-- **Database**: PostgreSQL with Neon serverless adapter
-- **ORM**: Drizzle ORM with full TypeScript support
-- **Schema Management**: `npm run db:push` for schema updates
-- **Storage**: DatabaseStorage class implementing all CRUD operations
-- **Demo Data**: Pre-seeded users with different roles for testing
-- **Environment**: DATABASE_URL configured for PostgreSQL connection
+### Platform Support
+- **Primary Target**: Heroku with PostgreSQL addon
+- **Alternative**: Any Node.js hosting with PostgreSQL database
+- **Development**: Local development with hot reload and database connection
 
-### Key Features
-- **Database-Driven Architecture**: All data persisted in PostgreSQL database
-- **User Registration System**: Invitation-based registration with role assignment
-- **Role-Based Access Control**: Admin, Manager, Operator, and Viewer permissions
-- **Asset Lifecycle Management**: Complete tracking from acquisition to disposal
-- **Multi-location Support**: Track assets across different physical locations
-- **Custodian Management**: Assign and track asset responsibility
-- **Repair Workflow**: Monitor assets under repair with expected return dates
-- **Insurance & Warranty Tracking**: Maintain important asset documentation
-- **Audit Trail**: Complete history of all asset transfers and status changes
-- **User Management**: Full CRUD operations for user accounts and permissions
+### Key Architectural Decisions
 
-### Recent Changes (July 17, 2025)
-- ✓ Integrated PostgreSQL database with Drizzle ORM
-- ✓ Replaced in-memory storage with database-backed storage
-- ✓ Added database relations and foreign key constraints
-- ✓ Implemented user registration with invitation code system
-- ✓ Created DatabaseStorage class for all data operations
-- ✓ Set up demo users with different role permissions
-- ✓ Successfully migrated schema with `npm run db:push`
-- ✓ **Added SQL Server support** - Converted Python pyodbc connection to Node.js
-- ✓ Created SqlServerStorage class for SQL Server InventoryDB
-- ✓ Added dual database support (PostgreSQL/SQL Server) via environment variable
-- ✓ Fixed authentication issues and added 17 diverse dummy assets
-- ✓ Restored proper session-based authentication with token fallback
+1. **Database Choice**: PostgreSQL chosen for ACID compliance and robust relational features needed for asset tracking
+2. **ORM Selection**: Drizzle ORM selected for type safety and performance over heavier alternatives
+3. **Authentication Strategy**: Session-based auth with token fallback provides reliability across different deployment scenarios
+4. **UI Framework**: shadcn/ui chosen for consistency, accessibility, and customization while maintaining design system coherence
+5. **State Management**: TanStack Query selected for its excellent caching, background updates, and developer experience
+6. **Build Tool**: Vite chosen for fast development builds and excellent TypeScript integration
+
+The system is designed to be maintainable, scalable, and suitable for organizations needing comprehensive asset management with proper audit trails and role-based access control.
+
+## Deployment Configuration
+
+### Multi-Platform Deployment Support
+- **Cloud Platforms**: Ready for Heroku, Render, Railway, and other Node.js hosting platforms
+- **Database**: PostgreSQL with automatic connection via DATABASE_URL environment variable
+- **Environment Variables**: Secure configuration management for sensitive data
+- **Health Monitoring**: Built-in API endpoints for application health checks
+
+### Deployment Files Created
+- `.gitignore` - Comprehensive exclusion of sensitive files, development artifacts, and build outputs
+- `DEPLOYMENT.md` - Complete deployment guide with platform-specific instructions and environment setup
+- `DEPLOYMENT_CHECKLIST.md` - Step-by-step verification checklist for successful deployment
+- `Procfile` - Heroku process definition for web service startup
+- `app.json` - Heroku app configuration with PostgreSQL addon and environment variables
+- `render.yaml` - Render platform deployment configuration with database provisioning
+
+### Build and Deployment Process
+1. **Dependency Installation**: `npm install` installs all production dependencies
+2. **Frontend Build**: Vite builds React application to `dist/public`
+3. **Backend Bundle**: esbuild creates optimized server bundle at `dist/index.js`
+4. **Database Migration**: `npm run db:push` sets up database schema
+5. **Production Start**: `npm start` launches the application server
+
+### Recent Updates (July 19, 2025)
+- ✓ **Enhanced deployment readiness** with comprehensive platform support
+- ✓ **Added sample assets** matching the actual database schema (voucher-based system)
+- ✓ **Implemented localStorage authentication** with Authorization header support for reliable cross-origin auth
+- ✓ **Created deployment documentation** including platform-specific configurations
+- ✓ **Added health check endpoints** for monitoring and deployment verification
+- ✓ **Configured multi-platform deployment files** for Heroku, Render, and Railway

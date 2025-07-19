@@ -1,0 +1,52 @@
+{
+  "name": "Inventory Management System",
+  "description": "A comprehensive inventory management system with multi-database support and role-based access control",
+  "repository": "https://github.com/your-username/inventory-management-system",
+  "logo": "https://cdn.jsdelivr.net/npm/lucide@latest/icons/package.svg",
+  "keywords": ["inventory", "asset-management", "typescript", "react", "express", "postgresql"],
+  "image": "heroku/nodejs",
+  "stack": "heroku-22",
+  "buildpacks": [
+    {
+      "url": "heroku/nodejs"
+    }
+  ],
+  "formation": {
+    "web": {
+      "quantity": 1,
+      "size": "basic"
+    }
+  },
+  "addons": [
+    {
+      "plan": "heroku-postgresql:mini",
+      "options": {
+        "version": "14"
+      }
+    }
+  ],
+  "env": {
+    "NODE_ENV": {
+      "description": "Node.js environment",
+      "value": "production"
+    },
+    "SESSION_SECRET": {
+      "description": "Secret key for session encryption - use a long random string",
+      "generator": "secret"
+    }
+  },
+  "scripts": {
+    "postdeploy": "npm run db:push"
+  },
+  "environments": {
+    "test": {
+      "addons": ["heroku-postgresql:mini"],
+      "env": {
+        "NODE_ENV": "test"
+      },
+      "scripts": {
+        "test": "npm test"
+      }
+    }
+  }
+}
