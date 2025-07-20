@@ -36,7 +36,7 @@ interface ConnectionResult {
 export default function ConnectionTest() {
   const [connectionParams, setConnectionParams] = useState<ConnectionParams>({
     server: 'WSERVER718623-I\\SQLEXPRESS',
-    database: 'USE InventoryDB',
+    database: 'InventoryDB',
     uid: '',
     pwd: '',
     encrypt: false,
@@ -165,6 +165,9 @@ export default function ConnectionTest() {
                     onChange={(e) => handleInputChange('server', e.target.value)}
                     placeholder="WSERVER718623-I\SQLEXPRESS"
                   />
+                  <p className="text-xs text-muted-foreground">
+                    Use server\instance format or IP address (e.g., 192.168.1.100\SQLEXPRESS)
+                  </p>
                 </div>
 
                 <div className="space-y-2">
@@ -234,7 +237,7 @@ export default function ConnectionTest() {
 
               <div className="space-y-2">
                 <Label>Quick Load Credentials</Label>
-                <div className="flex space-x-2">
+                <div className="flex space-x-2 flex-wrap gap-2">
                   <Button variant="outline" size="sm" onClick={() => loadDefaultCredentials('john')}>
                     John (Auth User)
                   </Button>
@@ -245,6 +248,13 @@ export default function ConnectionTest() {
                     Inventory Operator
                   </Button>
                 </div>
+                <p className="text-xs text-muted-foreground">
+                  <strong>Troubleshooting DNS Issues:</strong><br/>
+                  • Try using IP address instead of server name<br/>
+                  • Check if server name resolves correctly<br/>
+                  • Verify SQL Server is configured for remote connections<br/>
+                  • Ensure SQL Browser service is running for named instances
+                </p>
               </div>
 
               <Button 

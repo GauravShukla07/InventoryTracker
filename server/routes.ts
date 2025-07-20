@@ -20,6 +20,7 @@ import { insertAssetSchema, insertTransferSchema, insertRepairSchema, loginSchem
 import { ZodError } from "zod";
 import { checkSqlServerConnection } from './connection-test';
 import { testDatabaseConnection, testPresetConnections, validateConnectionParams, getConnectionStatusSummary, type ConnectionTestParams } from './connection-test-utility';
+import { runNetworkDiagnostics } from './network-diagnostics';
 
 // Simple token store for backup authentication
 const tokenStore = new Map<string, number>();
@@ -581,6 +582,37 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({
         success: false,
         message: "Failed to get environment info",
+        error: error.message
+      });
+    }
+  });
+
+  // Network diagnostics for troubleshooting connection issues
+  app.post("/api/database/network-diagnostics", async (req, res) => {
+    try {
+      const { serverName } = req.body;
+      
+      if (!serverName) {
+        return res.status(400).json({
+          success: false,
+          message: "Server name is required"
+        });
+      }
+
+      const diagnostics = await runNetworkDiagnostics(serverName);
+      
+      res.json({
+        success: true,
+        message: "Network diagnostics completed",
+        diagnostics,
+        timestamp: new Date().toISOString()
+      });
+      
+    } catch (error: any) {
+      console.error("Network diagnostics error:", error);
+      res.status(500).json({
+        success: false,
+        message: "Network diagnostics failed",
         error: error.message
       });
     }

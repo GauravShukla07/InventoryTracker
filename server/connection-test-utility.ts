@@ -1,4 +1,5 @@
 import sql from 'mssql';
+import { runNetworkDiagnostics } from './network-diagnostics';
 
 /**
  * Database Connection Testing Utility
@@ -37,10 +38,21 @@ export async function testDatabaseConnection(params: ConnectionTestParams): Prom
 
   try {
     console.log(`🧪 Testing connection to ${params.server} as ${params.uid}...`);
+    
+    // Parse server name to handle instance names properly
+    let serverName = params.server;
+    let instanceName = '';
+    
+    if (params.server.includes('\\')) {
+      const parts = params.server.split('\\');
+      serverName = parts[0];
+      instanceName = parts[1];
+      console.log(`🔍 Parsed server: ${serverName}, instance: ${instanceName}`);
+    }
 
-    // Build connection configuration
+    // Build connection configuration with proper server/instance handling
     const config: sql.config = {
-      server: params.server,
+      server: serverName,
       database: params.database,
       user: params.uid,
       password: params.pwd,
@@ -50,6 +62,7 @@ export async function testDatabaseConnection(params: ConnectionTestParams): Prom
         enableArithAbort: true,
         connectTimeout: params.connectTimeout ?? 15000,
         requestTimeout: 15000,
+        instanceName: instanceName || undefined,
       },
       pool: {
         max: 1,
@@ -57,6 +70,8 @@ export async function testDatabaseConnection(params: ConnectionTestParams): Prom
         idleTimeoutMillis: 5000
       }
     };
+    
+    console.log(`🔧 Connection config: server=${config.server}, instanceName=${config.options?.instanceName}, database=${config.database}, user=${config.user}`);
 
     // Attempt connection
     testPool = new sql.ConnectionPool(config);
@@ -122,7 +137,7 @@ export async function testDatabaseConnection(params: ConnectionTestParams): Prom
     let troubleshooting = '';
 
     if (error.message.includes('getaddrinfo ENOTFOUND')) {
-      errorCategory = 'Server not found';
+      errorCategory = 'Server not found (DNS resolution failed)';
       troubleshooting = 'Check server name and network connectivity';
     } else if (error.message.includes('Login failed')) {
       errorCategory = 'Authentication failed';
@@ -138,6 +153,17 @@ export async function testDatabaseConnection(params: ConnectionTestParams): Prom
       troubleshooting = 'Check if SQL Server is running and accepting connections';
     }
 
+    // Run network diagnostics for DNS/connectivity issues
+    let networkDiagnostics = null;
+    if (error.message.includes('getaddrinfo ENOTFOUND') || error.message.includes('ECONNREFUSED')) {
+      console.log('🔍 Running network diagnostics...');
+      try {
+        networkDiagnostics = await runNetworkDiagnostics(params.server);
+      } catch (diagError) {
+        console.error('Network diagnostics failed:', diagError);
+      }
+    }
+
     return {
       success: false,
       message: `Connection failed: ${errorCategory}`,
@@ -150,7 +176,8 @@ export async function testDatabaseConnection(params: ConnectionTestParams): Prom
         errorCategory,
         troubleshooting,
         connectionTime: `${connectionTime}ms`,
-        fullError: error.message
+        fullError: error.message,
+        networkDiagnostics
       }
     };
   }
@@ -164,21 +191,21 @@ export async function testPresetConnections(): Promise<ConnectionTestResult[]> {
     {
       name: 'Authentication User (john)',
       server: process.env.SQL_SERVER_HOST || 'WSERVER718623-I\\SQLEXPRESS',
-      database: 'USE InventoryDB',
+      database: 'InventoryDB',
       uid: process.env.SQL_AUTH_USER || 'john_login_user',
       pwd: process.env.SQL_AUTH_PASSWORD || 'StrongPassword1!'
     },
     {
       name: 'Admin Role',
       server: process.env.SQL_SERVER_HOST || 'WSERVER718623-I\\SQLEXPRESS',
-      database: 'USE InventoryDB',
+      database: 'InventoryDB',
       uid: 'admin_user',
       pwd: process.env.SQL_ADMIN_PASSWORD || 'AdminPass123!'
     },
     {
       name: 'Inventory Operator Role',
       server: process.env.SQL_SERVER_HOST || 'WSERVER718623-I\\SQLEXPRESS',
-      database: 'USE InventoryDB',
+      database: 'InventoryDB',
       uid: 'inventory_operator',
       pwd: process.env.SQL_INVENTORY_OPERATOR_PASSWORD || 'InventoryOp123!'
     }
@@ -255,7 +282,7 @@ export async function getConnectionStatusSummary(): Promise<{
     environment: {
       sqlServerMode: process.env.SQL_SERVER === 'true',
       serverHost: process.env.SQL_SERVER_HOST || 'WSERVER718623-I\\SQLEXPRESS',
-      database: 'USE InventoryDB',
+      database: 'InventoryDB',
       authUser: process.env.SQL_AUTH_USER || 'john_login_user'
     },
     lastTestedAt: new Date().toISOString()
