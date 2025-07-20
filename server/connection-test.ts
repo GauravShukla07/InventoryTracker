@@ -1,4 +1,4 @@
-import { getSqlServerConnection, executeSqlQuery, testSqlServerConnection } from './sqlserver-db';
+import { getSqlServerConnection, executeSqlQuery, testSqlServerConnection } from './sqlserver-connection';
 
 /**
  * Comprehensive SQL Server connection test utility

@@ -1,4 +1,4 @@
-import { executeSqlQuery, getSqlServerConnection } from './sqlserver-db';
+import { executeSqlQuery, getSqlServerConnection } from './sqlserver-connection';
 import type { User, Asset, Transfer, Repair, InsertUser, InsertAsset, InsertTransfer, InsertRepair } from '@shared/schema';
 import { IStorage } from './storage';
 
