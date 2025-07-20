@@ -14,6 +14,7 @@ import { authApi } from "@/lib/auth";
 import { apiRequest } from "@/lib/queryClient";
 import { loginSchema, registerSchema, type LoginCredentials, type RegisterData } from "@shared/schema";
 import { UserPlus, LogIn, Key, Info } from "lucide-react";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 export default function Login() {
   const { toast } = useToast();
@@ -120,6 +121,11 @@ export default function Login() {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-background px-4">
+      {/* Theme Toggle in top right */}
+      <div className="absolute top-4 right-4">
+        <ThemeToggle />
+      </div>
+      
       <Card className="w-full max-w-md">
         <CardHeader className="space-y-1">
           <CardTitle className="text-2xl font-bold text-center">

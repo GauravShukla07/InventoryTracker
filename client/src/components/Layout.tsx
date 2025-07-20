@@ -19,6 +19,7 @@ import {
   ChevronDown,
   LogOut
 } from "lucide-react";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -122,6 +123,8 @@ export default function Layout({ children }: LayoutProps) {
                 </p>
               </div>
             )}
+
+            <ThemeToggle />
 
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
