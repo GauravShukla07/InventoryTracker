@@ -1,6 +1,6 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
-import { SqlServerStorage } from './sqlserver-storage';
+import { RoleBasedSqlServerStorage } from './role-based-storage';
 import { MemStorage } from './storage';
 
 // Load environment variables
@@ -8,10 +8,10 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 // Dynamic storage instantiation based on environment
-let storage: any;
+let storage: RoleBasedSqlServerStorage | MemStorage;
 if (process.env.SQL_SERVER === 'true') {
-  console.log('SQL Server mode enabled - initializing SQL Server storage...');
-  storage = new SqlServerStorage();
+  console.log('SQL Server mode enabled - initializing role-based SQL Server storage...');
+  storage = new RoleBasedSqlServerStorage();
 } else {
   console.log('Using memory storage implementation');
   storage = new MemStorage();

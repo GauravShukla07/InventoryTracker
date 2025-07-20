@@ -129,9 +129,9 @@ The system is designed to be maintainable, scalable, and suitable for organizati
 
 ### Recent Updates (July 20, 2025)
 - ✓ **Complete dark mode system** with light/dark/system theme options and persistent theme switching
-- ✓ **SQL Server integration** configured as primary database with automatic fallback to memory storage
-- ✓ **Theme toggle components** added to login page and main application header
-- ✓ **Production-ready SQL Server configuration** with environment variable support
-- ✓ **Comprehensive SQL Server documentation** with deployment guide and connection instructions
-- ✓ **Smart storage selection** that automatically detects SQL Server availability and falls back gracefully
-- ✓ **Enhanced visual design** with full light/dark theme support across all components
+- ✓ **Role-Based SQL Server Authentication** implemented with two-tier connection architecture
+- ✓ **Dynamic connection switching** from low-privilege authentication user to role-specific users
+- ✓ **SQL Server Authentication support** equivalent to Python ODBC connection strings
+- ✓ **Comprehensive connection testing tools** with detailed diagnostics and troubleshooting
+- ✓ **Enterprise-grade security model** with principle of least privilege and connection isolation
+- ✓ **Production-ready authentication flow** matching requested john → role-based user pattern
