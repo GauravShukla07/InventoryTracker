@@ -10,7 +10,7 @@ import sql from 'mssql';
 // Connection configurations
 const SERVER_CONFIG = {
   server: process.env.SQL_SERVER_HOST || 'WSERVER718623-I\\SQLEXPRESS',
-  database: process.env.SQL_DATABASE || 'InventoryDB',
+  database: 'USE InventoryDB',
   options: {
     encrypt: process.env.SQL_ENCRYPT === 'true' || false,
     trustServerCertificate: process.env.SQL_TRUST_CERT !== 'false',
@@ -26,7 +26,7 @@ const SERVER_CONFIG = {
   }
 };
 
-// Initial authentication user (read-only access to Users table)
+// Initial authentication user (read-only access to users table)
 const AUTH_USER_CONFIG: sql.config = {
   ...SERVER_CONFIG,
   user: process.env.SQL_AUTH_USER || 'john_login_user',
@@ -78,17 +78,17 @@ export async function authenticateUser(emailOrUsername: string, password: string
     console.log(`🔍 Authenticating user: ${emailOrUsername}`);
     
     // Query Users table with john's read-only access
+    // Extract role (UID) and rolePassword (PWD) from Users table
     const result = await connection.request()
       .input('emailOrUsername', sql.VarChar, emailOrUsername)
       .input('password', sql.VarChar, password) // In production, this should be hashed
       .query(`
         SELECT 
-          id, username, email, role, department, isActive, lastLogin,
-          dbUser, dbPassword
-        FROM Users 
+          id, username, email, role, role_password as rolePassword, department, is_active as isActive, last_login as lastLogin
+        FROM users 
         WHERE (email = @emailOrUsername OR username = @emailOrUsername) 
         AND password = @password 
-        AND isActive = 1
+        AND is_active = true
       `);
 
     if (result.recordset.length === 0) {
@@ -103,7 +103,7 @@ export async function authenticateUser(emailOrUsername: string, password: string
     await connection.request()
       .input('userId', sql.Int, user.id)
       .input('lastLogin', sql.DateTime, new Date())
-      .query('UPDATE Users SET lastLogin = @lastLogin WHERE id = @userId');
+      .query('UPDATE users SET last_login = @lastLogin WHERE id = @userId');
 
     return {
       user: {
@@ -115,8 +115,8 @@ export async function authenticateUser(emailOrUsername: string, password: string
         isActive: user.isActive,
         lastLogin: user.lastLogin
       },
-      dbUser: user.dbUser || user.role, // Use dbUser field or fallback to role
-      dbPassword: user.dbPassword || getDefaultRolePassword(user.role)
+      dbUser: user.role, // UID = role column value
+      dbPassword: user.rolePassword // PWD = rolePassword column value
     };
 
   } catch (error: any) {

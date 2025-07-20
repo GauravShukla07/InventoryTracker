@@ -93,7 +93,7 @@ export class RoleBasedSqlServerStorage implements IStorage {
 
       const result = await executeUserQuery(
         this.currentSessionId,
-        'SELECT * FROM Users WHERE id = @userId',
+        'SELECT id, username, email, role, department, is_active as isActive, last_login as lastLogin FROM users WHERE id = @userId',
         { userId: id }
       );
       
@@ -115,7 +115,7 @@ export class RoleBasedSqlServerStorage implements IStorage {
     try {
       // Use auth connection for login verification
       const result = await executeAuthQuery(
-        'SELECT id, username, email, role, department, isActive, lastLogin FROM Users WHERE email = @email',
+        'SELECT id, username, email, role, role_password as rolePassword, department, is_active as isActive, last_login as lastLogin FROM users WHERE email = @email',
         { email }
       );
       
@@ -130,7 +130,7 @@ export class RoleBasedSqlServerStorage implements IStorage {
     try {
       // Use auth connection for login verification
       const result = await executeAuthQuery(
-        'SELECT id, username, email, role, department, isActive, lastLogin FROM Users WHERE username = @username',
+        'SELECT id, username, email, role, role_password as rolePassword, department, is_active as isActive, last_login as lastLogin FROM users WHERE username = @username',
         { username }
       );
       
@@ -149,7 +149,7 @@ export class RoleBasedSqlServerStorage implements IStorage {
 
       const result = await executeUserQuery(
         this.currentSessionId,
-        'SELECT id, username, email, role, department, isActive, lastLogin FROM Users ORDER BY username'
+        'SELECT id, username, email, role, department, is_active as isActive, last_login as lastLogin FROM users ORDER BY username'
       );
       
       return result.recordset;
@@ -167,18 +167,17 @@ export class RoleBasedSqlServerStorage implements IStorage {
 
       const result = await executeUserQuery(
         this.currentSessionId,
-        `INSERT INTO Users (username, email, password, role, department, isActive, dbUser, dbPassword)
-         OUTPUT INSERTED.*
-         VALUES (@username, @email, @password, @role, @department, @isActive, @dbUser, @dbPassword)`,
+        `INSERT INTO users (username, email, password, role, role_password, department, is_active)
+         VALUES (@username, @email, @password, @role, @rolePassword, @department, @isActive)
+         RETURNING *`,
         {
           username: userData.username,
           email: userData.email,
           password: userData.password,
           role: userData.role,
+          rolePassword: this.getRolePassword(userData.role), // rolePassword column stores PWD
           department: userData.department,
-          isActive: userData.isActive,
-          dbUser: userData.role, // Map role to database user
-          dbPassword: this.getRolePassword(userData.role)
+          isActive: userData.isActive
         }
       );
       
@@ -205,10 +204,10 @@ export class RoleBasedSqlServerStorage implements IStorage {
 
       const result = await executeUserQuery(
         this.currentSessionId,
-        `UPDATE Users 
+        `UPDATE users 
          SET ${setClause}
-         OUTPUT INSERTED.*
-         WHERE id = @id`,
+         WHERE id = @id
+         RETURNING *`,
         { id, ...updates }
       );
       
@@ -233,7 +232,7 @@ export class RoleBasedSqlServerStorage implements IStorage {
 
       const result = await executeUserQuery(
         this.currentSessionId,
-        'DELETE FROM Users WHERE id = @id',
+        'DELETE FROM users WHERE id = @id',
         { id }
       );
       
@@ -254,7 +253,7 @@ export class RoleBasedSqlServerStorage implements IStorage {
 
       const result = await executeUserQuery(
         this.currentSessionId,
-        'SELECT * FROM Assets ORDER BY name'
+        'SELECT * FROM assets ORDER BY voucher_no'
       );
       
       return result.recordset;
@@ -272,7 +271,7 @@ export class RoleBasedSqlServerStorage implements IStorage {
 
       const result = await executeUserQuery(
         this.currentSessionId,
-        'SELECT * FROM Assets WHERE id = @id',
+        'SELECT * FROM assets WHERE id = @id',
         { id }
       );
       
@@ -291,9 +290,9 @@ export class RoleBasedSqlServerStorage implements IStorage {
 
       const result = await executeUserQuery(
         this.currentSessionId,
-        `INSERT INTO Assets (name, description, category, location, status, voucherNumber, donor, receivedDate, value)
-         OUTPUT INSERTED.*
-         VALUES (@name, @description, @category, @location, @status, @voucherNumber, @donor, @receivedDate, @value)`,
+        `INSERT INTO assets (voucher_no, date, donor, current_location, status)
+         VALUES (@voucherNo, @date, @donor, @currentLocation, @status)
+         RETURNING *`,
         assetData
       );
       
@@ -316,10 +315,10 @@ export class RoleBasedSqlServerStorage implements IStorage {
 
       const result = await executeUserQuery(
         this.currentSessionId,
-        `UPDATE Assets 
+        `UPDATE assets 
          SET ${setClause}
-         OUTPUT INSERTED.*
-         WHERE id = @id`,
+         WHERE id = @id
+         RETURNING *`,
         { id, ...updates }
       );
       
@@ -338,7 +337,7 @@ export class RoleBasedSqlServerStorage implements IStorage {
 
       const result = await executeUserQuery(
         this.currentSessionId,
-        'DELETE FROM Assets WHERE id = @id',
+        'DELETE FROM assets WHERE id = @id',
         { id }
       );
       
@@ -358,7 +357,7 @@ export class RoleBasedSqlServerStorage implements IStorage {
 
       const result = await executeUserQuery(
         this.currentSessionId,
-        'SELECT * FROM Transfers ORDER BY transferDate DESC'
+        'SELECT * FROM transfers ORDER BY transfer_date DESC'
       );
       
       return result.recordset;
@@ -376,9 +375,9 @@ export class RoleBasedSqlServerStorage implements IStorage {
 
       const result = await executeUserQuery(
         this.currentSessionId,
-        `INSERT INTO Transfers (assetId, fromLocation, toLocation, transferDate, transferredBy, reason)
-         OUTPUT INSERTED.*
-         VALUES (@assetId, @fromLocation, @toLocation, @transferDate, @transferredBy, @reason)`,
+        `INSERT INTO transfers (asset_id, from_location, to_location, transfer_date, to_custodian, reason)
+         VALUES (@assetId, @fromLocation, @toLocation, @transferDate, @toCustodian, @reason)
+         RETURNING *`,
         transferData
       );
       
@@ -398,7 +397,7 @@ export class RoleBasedSqlServerStorage implements IStorage {
 
       const result = await executeUserQuery(
         this.currentSessionId,
-        'SELECT * FROM Repairs ORDER BY sentDate DESC'
+        'SELECT * FROM repairs ORDER BY sent_date DESC'
       );
       
       return result.recordset;
@@ -416,9 +415,9 @@ export class RoleBasedSqlServerStorage implements IStorage {
 
       const result = await executeUserQuery(
         this.currentSessionId,
-        `INSERT INTO Repairs (assetId, issue, sentDate, expectedReturn, repairShop, status)
-         OUTPUT INSERTED.*
-         VALUES (@assetId, @issue, @sentDate, @expectedReturn, @repairShop, @status)`,
+        `INSERT INTO repairs (asset_id, issue, sent_date, expected_return_date, repair_center, status)
+         VALUES (@assetId, @issue, @sentDate, @expectedReturnDate, @repairCenter, @status)
+         RETURNING *`,
         repairData
       );
       
@@ -441,10 +440,10 @@ export class RoleBasedSqlServerStorage implements IStorage {
 
       const result = await executeUserQuery(
         this.currentSessionId,
-        `UPDATE Repairs 
+        `UPDATE repairs 
          SET ${setClause}
-         OUTPUT INSERTED.*
-         WHERE id = @id`,
+         WHERE id = @id
+         RETURNING *`,
         { id, ...updates }
       );
       
@@ -461,7 +460,7 @@ export class RoleBasedSqlServerStorage implements IStorage {
       if (!this.currentSessionId) {
         // Use auth connection for this operation
         await executeAuthQuery(
-          'UPDATE Users SET lastLogin = @lastLogin WHERE id = @id',
+          'UPDATE users SET last_login = @lastLogin WHERE id = @id',
           { id, lastLogin: new Date() }
         );
         return;
@@ -469,7 +468,7 @@ export class RoleBasedSqlServerStorage implements IStorage {
 
       await executeUserQuery(
         this.currentSessionId,
-        'UPDATE Users SET lastLogin = @lastLogin WHERE id = @id',
+        'UPDATE users SET last_login = @lastLogin WHERE id = @id',
         { id, lastLogin: new Date() }
       );
     } catch (error: any) {
@@ -485,7 +484,7 @@ export class RoleBasedSqlServerStorage implements IStorage {
 
       const result = await executeUserQuery(
         this.currentSessionId,
-        'SELECT * FROM Transfers WHERE assetId = @assetId ORDER BY transferDate DESC',
+        'SELECT * FROM transfers WHERE asset_id = @assetId ORDER BY transfer_date DESC',
         { assetId }
       );
       
@@ -504,7 +503,7 @@ export class RoleBasedSqlServerStorage implements IStorage {
 
       const result = await executeUserQuery(
         this.currentSessionId,
-        "SELECT * FROM Repairs WHERE status != 'completed' ORDER BY sentDate DESC"
+        "SELECT * FROM repairs WHERE status != 'completed' ORDER BY sent_date DESC"
       );
       
       return result.recordset;
@@ -522,7 +521,7 @@ export class RoleBasedSqlServerStorage implements IStorage {
 
       const result = await executeUserQuery(
         this.currentSessionId,
-        'SELECT * FROM Repairs WHERE assetId = @assetId ORDER BY sentDate DESC',
+        'SELECT * FROM repairs WHERE asset_id = @assetId ORDER BY sent_date DESC',
         { assetId }
       );
       
@@ -538,7 +537,7 @@ export class RoleBasedSqlServerStorage implements IStorage {
     try {
       // Use auth connection for configuration queries
       const result = await executeAuthQuery(
-        "SELECT COUNT(*) as userCount FROM Users WHERE role = 'admin'"
+        "SELECT COUNT(*) as userCount FROM users WHERE role = 'admin'"
       );
       
       return result.recordset[0].userCount === 0;
