@@ -235,26 +235,57 @@ export default function ConnectionTest() {
 
               <Separator />
 
-              <div className="space-y-2">
-                <Label>Quick Load Credentials</Label>
-                <div className="flex space-x-2 flex-wrap gap-2">
-                  <Button variant="outline" size="sm" onClick={() => loadDefaultCredentials('john')}>
-                    John (Auth User)
-                  </Button>
-                  <Button variant="outline" size="sm" onClick={() => loadDefaultCredentials('admin')}>
-                    Admin User
-                  </Button>
-                  <Button variant="outline" size="sm" onClick={() => loadDefaultCredentials('operator')}>
-                    Inventory Operator
-                  </Button>
+              <div className="space-y-3">
+                <div>
+                  <Label>Quick Load Credentials</Label>
+                  <div className="flex space-x-2 flex-wrap gap-2 mt-2">
+                    <Button variant="outline" size="sm" onClick={() => loadDefaultCredentials('john')}>
+                      John (Auth User)
+                    </Button>
+                    <Button variant="outline" size="sm" onClick={() => loadDefaultCredentials('admin')}>
+                      Admin User
+                    </Button>
+                    <Button variant="outline" size="sm" onClick={() => loadDefaultCredentials('operator')}>
+                      Inventory Operator
+                    </Button>
+                  </div>
                 </div>
-                <p className="text-xs text-muted-foreground">
-                  <strong>Troubleshooting DNS Issues:</strong><br/>
-                  • Try using IP address instead of server name<br/>
-                  • Check if server name resolves correctly<br/>
-                  • Verify SQL Server is configured for remote connections<br/>
-                  • Ensure SQL Browser service is running for named instances
-                </p>
+
+                <div className="p-3 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-md">
+                  <p className="text-sm text-yellow-800 dark:text-yellow-200">
+                    <strong>⚠️ DNS Resolution Issue Detected</strong><br/>
+                    The server name "WSERVER718623-I" cannot be resolved. Try these alternatives:
+                  </p>
+                  <div className="grid grid-cols-1 gap-1 mt-2">
+                    <Button 
+                      variant="ghost" 
+                      size="sm" 
+                      className="justify-start text-left h-auto p-2 text-xs"
+                      onClick={() => handleInputChange('server', '192.168.1.100\\SQLEXPRESS')}
+                    >
+                      <code className="bg-gray-100 dark:bg-gray-800 px-1 rounded text-green-700 dark:text-green-400">192.168.1.100\SQLEXPRESS</code>
+                      <span className="ml-2 text-muted-foreground">Try with IP address</span>
+                    </Button>
+                    <Button 
+                      variant="ghost" 
+                      size="sm" 
+                      className="justify-start text-left h-auto p-2 text-xs"
+                      onClick={() => handleInputChange('server', 'localhost\\SQLEXPRESS')}
+                    >
+                      <code className="bg-gray-100 dark:bg-gray-800 px-1 rounded text-blue-700 dark:text-blue-400">localhost\SQLEXPRESS</code>
+                      <span className="ml-2 text-muted-foreground">If SQL Server is local</span>
+                    </Button>
+                    <Button 
+                      variant="ghost" 
+                      size="sm" 
+                      className="justify-start text-left h-auto p-2 text-xs"
+                      onClick={() => handleInputChange('server', 'WSERVER718623-I,1433')}
+                    >
+                      <code className="bg-gray-100 dark:bg-gray-800 px-1 rounded text-purple-700 dark:text-purple-400">WSERVER718623-I,1433</code>
+                      <span className="ml-2 text-muted-foreground">Try with port number</span>
+                    </Button>
+                  </div>
+                </div>
               </div>
 
               <Button 
