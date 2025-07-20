@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useLocation } from "wouter";
+import { useLocation, Link } from "wouter";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -327,6 +327,12 @@ export default function Login() {
                 </Alert>
               </TabsContent>
           </Tabs>
+          
+          <div className="mt-4 text-center">
+            <Link href="/connection-test" className="text-sm text-blue-600 hover:underline dark:text-blue-400">
+              Test Database Connection
+            </Link>
+          </div>
         </CardContent>
       </Card>
     </div>

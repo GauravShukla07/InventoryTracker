@@ -13,12 +13,14 @@ import Transfer from "@/pages/Transfer";
 import Repair from "@/pages/Repair";
 import UserManagement from "@/pages/UserManagement";
 import Login from "@/pages/Login";
+import ConnectionTest from "@/pages/ConnectionTest";
 import NotFound from "@/pages/not-found";
 
 function Router() {
   return (
     <Switch>
       <Route path="/login" component={Login} />
+      <Route path="/connection-test" component={ConnectionTest} />
       <Route path="*">
         <AuthGuard>
           <Layout>
@@ -29,6 +31,7 @@ function Router() {
               <Route path="/transfer" component={Transfer} />
               <Route path="/repair" component={Repair} />
               <Route path="/users" component={UserManagement} />
+              <Route path="/connection-test" component={ConnectionTest} />
               <Route path="/reports" component={() => <div className="p-6"><h1>Reports - Coming Soon</h1></div>} />
               <Route component={NotFound} />
             </Switch>

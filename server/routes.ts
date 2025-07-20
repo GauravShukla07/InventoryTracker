@@ -19,6 +19,7 @@ if (process.env.SQL_SERVER === 'true') {
 import { insertAssetSchema, insertTransferSchema, insertRepairSchema, loginSchema, registerSchema, insertUserSchema, updateUserSchema } from "@shared/schema";
 import { ZodError } from "zod";
 import { checkSqlServerConnection } from './connection-test';
+import { testDatabaseConnection, testPresetConnections, validateConnectionParams, getConnectionStatusSummary, type ConnectionTestParams } from './connection-test-utility';
 
 // Simple token store for backup authentication
 const tokenStore = new Map<string, number>();
@@ -500,13 +501,87 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/database/status", async (req, res) => {
     try {
       const connectionStatus = await checkSqlServerConnection();
-      res.json(connectionStatus);
+      const summary = await getConnectionStatusSummary();
+      res.json({
+        ...connectionStatus,
+        summary
+      });
     } catch (error) {
       res.status(500).json({
         isConnected: false,
         status: 'ERROR',
         error: error.message,
         details: { message: 'Connection test failed' }
+      });
+    }
+  });
+
+  // Connection testing utility - accessible without authentication
+  app.post("/api/database/test-connection", async (req, res) => {
+    try {
+      const connectionParams: ConnectionTestParams = req.body;
+      
+      // Validate parameters
+      const validation = validateConnectionParams(connectionParams);
+      if (!validation.valid) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid connection parameters",
+          errors: validation.errors
+        });
+      }
+
+      // Test the connection
+      const result = await testDatabaseConnection(connectionParams);
+      
+      // Return result (success or failure)
+      res.status(result.success ? 200 : 400).json(result);
+      
+    } catch (error: any) {
+      console.error("Connection test error:", error);
+      res.status(500).json({
+        success: false,
+        message: "Connection test failed",
+        error: error.message
+      });
+    }
+  });
+
+  // Test preset connections - useful for diagnostics
+  app.get("/api/database/test-presets", async (req, res) => {
+    try {
+      const results = await testPresetConnections();
+      res.json({
+        success: true,
+        message: "Preset connection tests completed",
+        results,
+        timestamp: new Date().toISOString()
+      });
+    } catch (error: any) {
+      console.error("Preset connection tests error:", error);
+      res.status(500).json({
+        success: false,
+        message: "Preset connection tests failed",
+        error: error.message
+      });
+    }
+  });
+
+  // Get connection environment info - useful for setup verification
+  app.get("/api/database/environment", async (req, res) => {
+    try {
+      const summary = await getConnectionStatusSummary();
+      res.json({
+        success: true,
+        environment: summary.environment,
+        message: "Environment configuration retrieved",
+        timestamp: new Date().toISOString()
+      });
+    } catch (error: any) {
+      res.status(500).json({
+        success: false,
+        message: "Failed to get environment info",
+        error: error.message
       });
     }
   });
