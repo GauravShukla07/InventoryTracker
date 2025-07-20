@@ -1,7 +1,7 @@
 // Test script to validate SQL Server connection
 // Run with: node test-sqlserver.js
 
-const { testSqlServerConnection, getSqlServerConnection, executeSqlQuery } = require('./server/sqlserver-db.ts');
+import { testSqlServerConnection, getSqlServerConnection, executeSqlQuery } from './server/sqlserver-db.js';
 
 async function testConnection() {
   console.log('Testing SQL Server connection...');

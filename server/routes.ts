@@ -1,6 +1,28 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
-import { storage } from "./storage";
+import { SqlServerStorage } from './sqlserver-storage';
+import { MemStorage } from './storage';
+
+// Dynamic storage instantiation based on environment
+let storage: any;
+try {
+  if (process.env.SQL_SERVER === 'true') {
+    console.log('Attempting to use SQL Server storage implementation...');
+    storage = new SqlServerStorage();
+    console.log('✅ SQL Server storage configured successfully');
+  } else {
+    console.log('Using memory storage implementation (for demonstration purposes)');
+    storage = new MemStorage();
+  }
+} catch (error) {
+  console.log('⚠️ SQL Server connection failed, falling back to memory storage');
+  console.log('Error:', error.message);
+  console.log('💡 To use SQL Server, ensure:');
+  console.log('   - SQL Server is accessible from this environment');
+  console.log('   - Database InventoryDB exists');
+  console.log('   - Connection string is correct in sqlserver-db.ts');
+  storage = new MemStorage();
+}
 import { insertAssetSchema, insertTransferSchema, insertRepairSchema, loginSchema, registerSchema, insertUserSchema, updateUserSchema } from "@shared/schema";
 import { ZodError } from "zod";
 
