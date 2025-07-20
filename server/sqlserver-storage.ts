@@ -30,8 +30,8 @@ export class SqlServerStorage implements IStorage {
       );
       return result.recordset[0] || undefined;
     } catch (error) {
-      console.error('Error getting user by email:', error);
-      return undefined;
+      console.error('❌ SQL Server connection failed during login attempt:', error.message);
+      throw new Error(`Database connection failed: ${error.message}`);
     }
   }
 
@@ -133,8 +133,8 @@ export class SqlServerStorage implements IStorage {
       const result = await executeSqlQuery('SELECT * FROM Assets ORDER BY createdAt DESC');
       return result.recordset;
     } catch (error) {
-      console.error('Error getting assets:', error);
-      return [];
+      console.error('❌ SQL Server connection failed while fetching assets:', error.message);
+      throw new Error(`Database connection failed: ${error.message}`);
     }
   }
 

@@ -3,24 +3,17 @@ import { createServer, type Server } from "http";
 import { SqlServerStorage } from './sqlserver-storage';
 import { MemStorage } from './storage';
 
+// Load environment variables
+import dotenv from 'dotenv';
+dotenv.config();
+
 // Dynamic storage instantiation based on environment
 let storage: any;
-try {
-  if (process.env.SQL_SERVER === 'true') {
-    console.log('Attempting to use SQL Server storage implementation...');
-    storage = new SqlServerStorage();
-    console.log('✅ SQL Server storage configured successfully');
-  } else {
-    console.log('Using memory storage implementation (for demonstration purposes)');
-    storage = new MemStorage();
-  }
-} catch (error) {
-  console.log('⚠️ SQL Server connection failed, falling back to memory storage');
-  console.log('Error:', error.message);
-  console.log('💡 To use SQL Server, ensure:');
-  console.log('   - SQL Server is accessible from this environment');
-  console.log('   - Database InventoryDB exists');
-  console.log('   - Connection string is correct in sqlserver-db.ts');
+if (process.env.SQL_SERVER === 'true') {
+  console.log('SQL Server mode enabled - initializing SQL Server storage...');
+  storage = new SqlServerStorage();
+} else {
+  console.log('Using memory storage implementation');
   storage = new MemStorage();
 }
 import { insertAssetSchema, insertTransferSchema, insertRepairSchema, loginSchema, registerSchema, insertUserSchema, updateUserSchema } from "@shared/schema";
@@ -55,7 +48,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { email, password } = loginSchema.parse(req.body);
       
-      const user = await storage.getUserByEmail(email);
+      let user;
+      try {
+        user = await storage.getUserByEmail(email);
+      } catch (error) {
+        console.error('❌ Database connection failed during login:', error.message);
+        return res.status(500).json({ 
+          message: "Database connection failed", 
+          error: error.message,
+          details: "Unable to connect to SQL Server database"
+        });
+      }
+      
       if (!user || user.password !== password) {
         return res.status(401).json({ message: "Invalid credentials" });
       }
@@ -149,7 +153,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const assets = await storage.getAssets();
       res.json(assets);
     } catch (error) {
-      res.status(500).json({ message: "Failed to fetch assets" });
+      console.error("❌ Database error fetching assets:", error.message);
+      res.status(500).json({ 
+        message: "Database connection failed", 
+        error: error.message,
+        details: "Unable to fetch assets from SQL Server"
+      });
     }
   });
 

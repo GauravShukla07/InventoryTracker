@@ -4,6 +4,15 @@ import MemoryStore from "memorystore";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 
+// Load environment variables
+import dotenv from 'dotenv';
+dotenv.config();
+
+// Log environment variables for debugging
+console.log('🔍 Environment check:');
+console.log('SQL_SERVER:', process.env.SQL_SERVER);
+console.log('NODE_ENV:', process.env.NODE_ENV);
+
 // Extend session data interface
 declare module 'express-session' {
   interface SessionData {
