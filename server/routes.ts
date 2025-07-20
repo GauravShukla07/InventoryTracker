@@ -18,6 +18,7 @@ if (process.env.SQL_SERVER === 'true') {
 }
 import { insertAssetSchema, insertTransferSchema, insertRepairSchema, loginSchema, registerSchema, insertUserSchema, updateUserSchema } from "@shared/schema";
 import { ZodError } from "zod";
+import { checkSqlServerConnection } from './connection-test';
 
 // Simple token store for backup authentication
 const tokenStore = new Map<string, number>();
@@ -492,6 +493,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "Invalid input", errors: error.errors });
       }
       res.status(500).json({ message: "Failed to update repair" });
+    }
+  });
+
+  // SQL Server connection test endpoint
+  app.get("/api/database/status", async (req, res) => {
+    try {
+      const connectionStatus = await checkSqlServerConnection();
+      res.json(connectionStatus);
+    } catch (error) {
+      res.status(500).json({
+        isConnected: false,
+        status: 'ERROR',
+        error: error.message,
+        details: { message: 'Connection test failed' }
+      });
     }
   });
 
