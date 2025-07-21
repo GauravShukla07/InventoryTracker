@@ -190,22 +190,22 @@ export async function testPresetConnections(): Promise<ConnectionTestResult[]> {
   const presets = [
     {
       name: 'Authentication User (john)',
-      server: process.env.SQL_SERVER_HOST || 'WSERVER718623-I\\SQLEXPRESS',
-      database: 'InventoryDB',
+      server: process.env.SQL_SERVER_HOST || '163.227.186.23\\SQLEXPRESS',
+      database: 'USE InventoryDB',
       uid: process.env.SQL_AUTH_USER || 'john_login_user',
       pwd: process.env.SQL_AUTH_PASSWORD || 'StrongPassword1!'
     },
     {
       name: 'Admin Role',
-      server: process.env.SQL_SERVER_HOST || 'WSERVER718623-I\\SQLEXPRESS',
-      database: 'InventoryDB',
+      server: process.env.SQL_SERVER_HOST || '163.227.186.23\\SQLEXPRESS',
+      database: 'USE InventoryDB',
       uid: 'admin_user',
       pwd: process.env.SQL_ADMIN_PASSWORD || 'AdminPass123!'
     },
     {
       name: 'Inventory Operator Role',
-      server: process.env.SQL_SERVER_HOST || 'WSERVER718623-I\\SQLEXPRESS',
-      database: 'InventoryDB',
+      server: process.env.SQL_SERVER_HOST || '163.227.186.23\\SQLEXPRESS',
+      database: 'USE InventoryDB',
       uid: 'inventory_operator',
       pwd: process.env.SQL_INVENTORY_OPERATOR_PASSWORD || 'InventoryOp123!'
     }
@@ -282,7 +282,7 @@ export async function getConnectionStatusSummary(): Promise<{
     environment: {
       sqlServerMode: process.env.SQL_SERVER === 'true',
       serverHost: process.env.SQL_SERVER_HOST || '163.227.186.23\\SQLEXPRESS',
-      database: 'InventoryDB',
+      database: 'USE InventoryDB',
       authUser: process.env.SQL_AUTH_USER || 'john_login_user'
     },
     lastTestedAt: new Date().toISOString()

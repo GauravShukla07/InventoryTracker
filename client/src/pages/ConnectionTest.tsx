@@ -254,7 +254,7 @@ export default function ConnectionTest() {
                 <div className="p-3 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-md">
                   <p className="text-sm text-yellow-800 dark:text-yellow-200">
                     <strong>⚠️ DNS Resolution Issue Detected</strong><br/>
-                    The server name "WSERVER718623-I" cannot be resolved. Try these alternatives:
+                    Connection timeout detected (30s+). Try these alternatives for server "163.227.186.23":
                   </p>
                   <div className="grid grid-cols-1 gap-1 mt-2">
                     <Button 
@@ -283,6 +283,15 @@ export default function ConnectionTest() {
                     >
                       <code className="bg-gray-100 dark:bg-gray-800 px-1 rounded text-purple-700 dark:text-purple-400">163.227.186.23,1433</code>
                       <span className="ml-2 text-muted-foreground">Try with port number</span>
+                    </Button>
+                    <Button 
+                      variant="ghost" 
+                      size="sm" 
+                      className="justify-start text-left h-auto p-2 text-xs"
+                      onClick={() => handleInputChange('server', '163.227.186.23')}
+                    >
+                      <code className="bg-gray-100 dark:bg-gray-800 px-1 rounded text-orange-700 dark:text-orange-400">163.227.186.23</code>
+                      <span className="ml-2 text-muted-foreground">Default instance (no SQLEXPRESS)</span>
                     </Button>
                   </div>
                 </div>
