@@ -281,7 +281,7 @@ export async function getConnectionStatusSummary(): Promise<{
     authConnectionStatus: 'Disconnected (expected in development)',
     environment: {
       sqlServerMode: process.env.SQL_SERVER === 'true',
-      serverHost: process.env.SQL_SERVER_HOST || 'WSERVER718623-I\\SQLEXPRESS',
+      serverHost: process.env.SQL_SERVER_HOST || '163.227.186.23\\SQLEXPRESS',
       database: 'InventoryDB',
       authUser: process.env.SQL_AUTH_USER || 'john_login_user'
     },

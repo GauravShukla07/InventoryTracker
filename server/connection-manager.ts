@@ -9,8 +9,8 @@ import sql from 'mssql';
 
 // Connection configurations
 const SERVER_CONFIG = {
-  server: process.env.SQL_SERVER_HOST || 'WSERVER718623-I\\SQLEXPRESS',
-  database: 'USE InventoryDB',
+  server: process.env.SQL_SERVER_HOST || '163.227.186.23\\SQLEXPRESS',
+  database: 'InventoryDB',
   options: {
     encrypt: process.env.SQL_ENCRYPT === 'true' || false,
     trustServerCertificate: process.env.SQL_TRUST_CERT !== 'false',

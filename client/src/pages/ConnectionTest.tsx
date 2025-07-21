@@ -261,9 +261,9 @@ export default function ConnectionTest() {
                       variant="ghost" 
                       size="sm" 
                       className="justify-start text-left h-auto p-2 text-xs"
-                      onClick={() => handleInputChange('server', '192.168.1.100\\SQLEXPRESS')}
+                      onClick={() => handleInputChange('server', '163.227.186.23\\SQLEXPRESS')}
                     >
-                      <code className="bg-gray-100 dark:bg-gray-800 px-1 rounded text-green-700 dark:text-green-400">192.168.1.100\SQLEXPRESS</code>
+                      <code className="bg-gray-100 dark:bg-gray-800 px-1 rounded text-green-700 dark:text-green-400">163.227.186.23\SQLEXPRESS</code>
                       <span className="ml-2 text-muted-foreground">Try with IP address</span>
                     </Button>
                     <Button 
@@ -279,9 +279,9 @@ export default function ConnectionTest() {
                       variant="ghost" 
                       size="sm" 
                       className="justify-start text-left h-auto p-2 text-xs"
-                      onClick={() => handleInputChange('server', 'WSERVER718623-I,1433')}
+                      onClick={() => handleInputChange('server', '163.227.186.23,1433')}
                     >
-                      <code className="bg-gray-100 dark:bg-gray-800 px-1 rounded text-purple-700 dark:text-purple-400">WSERVER718623-I,1433</code>
+                      <code className="bg-gray-100 dark:bg-gray-800 px-1 rounded text-purple-700 dark:text-purple-400">163.227.186.23,1433</code>
                       <span className="ml-2 text-muted-foreground">Try with port number</span>
                     </Button>
                   </div>
