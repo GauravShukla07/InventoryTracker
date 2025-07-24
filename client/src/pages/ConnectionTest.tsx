@@ -16,6 +16,7 @@ interface ConnectionParams {
   database: string;
   uid: string;
   pwd: string;
+  port?: number;
   encrypt?: boolean;
   trustServerCertificate?: boolean;
   connectTimeout?: number;
@@ -35,8 +36,8 @@ interface ConnectionResult {
 
 export default function ConnectionTest() {
   const [connectionParams, setConnectionParams] = useState<ConnectionParams>({
-    server: 'WSERVER718623-I\\SQLEXPRESS',
-    database: 'InventoryDB',
+    server: '163.227.186.23',
+    database: 'USE InventoryDB',
     uid: '',
     pwd: '',
     encrypt: false,
@@ -66,7 +67,10 @@ export default function ConnectionTest() {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(connectionParams)
+        body: JSON.stringify({
+          ...connectionParams,
+          port: 2499
+        })
       });
 
       const result = await response.json();
@@ -163,10 +167,10 @@ export default function ConnectionTest() {
                     id="server"
                     value={connectionParams.server}
                     onChange={(e) => handleInputChange('server', e.target.value)}
-                    placeholder="WSERVER718623-I\SQLEXPRESS"
+                    placeholder="163.227.186.23"
                   />
                   <p className="text-xs text-muted-foreground">
-                    Use server\instance format or IP address (e.g., 192.168.1.100\SQLEXPRESS)
+                    Use IP address only: 163.227.186.23
                   </p>
                 </div>
 
@@ -199,6 +203,19 @@ export default function ConnectionTest() {
                     onChange={(e) => handleInputChange('pwd', e.target.value)}
                     placeholder="password"
                   />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="port">Port</Label>
+                  <Input
+                    id="port"
+                    type="number"
+                    value={2499}
+                    onChange={(e) => handleInputChange('port', parseInt(e.target.value))}
+                    placeholder="2499"
+                    disabled
+                  />
+                  <p className="text-xs text-muted-foreground">Fixed port 2499</p>
                 </div>
 
                 <div className="space-y-2">
@@ -251,49 +268,11 @@ export default function ConnectionTest() {
                   </div>
                 </div>
 
-                <div className="p-3 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-md">
-                  <p className="text-sm text-yellow-800 dark:text-yellow-200">
-                    <strong>⚠️ DNS Resolution Issue Detected</strong><br/>
-                    Connection timeout detected (30s+). Try these alternatives for server "163.227.186.23":
+                <div className="p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-md">
+                  <p className="text-sm text-blue-800 dark:text-blue-200">
+                    <strong>✓ Connection Configuration</strong><br/>
+                    Using IP address 163.227.186.23 with port 2499 (TCP ports filtered, using custom port)
                   </p>
-                  <div className="grid grid-cols-1 gap-1 mt-2">
-                    <Button 
-                      variant="ghost" 
-                      size="sm" 
-                      className="justify-start text-left h-auto p-2 text-xs"
-                      onClick={() => handleInputChange('server', '163.227.186.23\\SQLEXPRESS')}
-                    >
-                      <code className="bg-gray-100 dark:bg-gray-800 px-1 rounded text-green-700 dark:text-green-400">163.227.186.23\SQLEXPRESS</code>
-                      <span className="ml-2 text-muted-foreground">Try with IP address</span>
-                    </Button>
-                    <Button 
-                      variant="ghost" 
-                      size="sm" 
-                      className="justify-start text-left h-auto p-2 text-xs"
-                      onClick={() => handleInputChange('server', 'localhost\\SQLEXPRESS')}
-                    >
-                      <code className="bg-gray-100 dark:bg-gray-800 px-1 rounded text-blue-700 dark:text-blue-400">localhost\SQLEXPRESS</code>
-                      <span className="ml-2 text-muted-foreground">If SQL Server is local</span>
-                    </Button>
-                    <Button 
-                      variant="ghost" 
-                      size="sm" 
-                      className="justify-start text-left h-auto p-2 text-xs"
-                      onClick={() => handleInputChange('server', '163.227.186.23,1433')}
-                    >
-                      <code className="bg-gray-100 dark:bg-gray-800 px-1 rounded text-purple-700 dark:text-purple-400">163.227.186.23,1433</code>
-                      <span className="ml-2 text-muted-foreground">Try with port number</span>
-                    </Button>
-                    <Button 
-                      variant="ghost" 
-                      size="sm" 
-                      className="justify-start text-left h-auto p-2 text-xs"
-                      onClick={() => handleInputChange('server', '163.227.186.23')}
-                    >
-                      <code className="bg-gray-100 dark:bg-gray-800 px-1 rounded text-orange-700 dark:text-orange-400">163.227.186.23</code>
-                      <span className="ml-2 text-muted-foreground">Default instance (no SQLEXPRESS)</span>
-                    </Button>
-                  </div>
                 </div>
               </div>
 

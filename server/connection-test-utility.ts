@@ -12,6 +12,7 @@ export interface ConnectionTestParams {
   database: string;
   uid: string;
   pwd: string;
+  port?: number;
   encrypt?: boolean;
   trustServerCertificate?: boolean;
   connectTimeout?: number;
@@ -50,19 +51,19 @@ export async function testDatabaseConnection(params: ConnectionTestParams): Prom
       console.log(`🔍 Parsed server: ${serverName}, instance: ${instanceName}`);
     }
 
-    // Build connection configuration with proper server/instance handling
+    // Build connection configuration with proper server/port handling
     const config: sql.config = {
       server: serverName,
       database: params.database,
       user: params.uid,
       password: params.pwd,
+      port: params.port ?? 2499,
       options: {
         encrypt: params.encrypt ?? false,
         trustServerCertificate: params.trustServerCertificate ?? true,
         enableArithAbort: true,
         connectTimeout: params.connectTimeout ?? 15000,
         requestTimeout: 15000,
-        instanceName: instanceName || undefined,
       },
       pool: {
         max: 1,
@@ -71,7 +72,7 @@ export async function testDatabaseConnection(params: ConnectionTestParams): Prom
       }
     };
     
-    console.log(`🔧 Connection config: server=${config.server}, instanceName=${config.options?.instanceName}, database=${config.database}, user=${config.user}`);
+    console.log(`🔧 Connection config: server=${config.server}, port=${config.port}, database=${config.database}, user=${config.user}`);
 
     // Attempt connection
     testPool = new sql.ConnectionPool(config);
@@ -190,23 +191,26 @@ export async function testPresetConnections(): Promise<ConnectionTestResult[]> {
   const presets = [
     {
       name: 'Authentication User (john)',
-      server: process.env.SQL_SERVER_HOST || '163.227.186.23\\SQLEXPRESS',
+      server: '163.227.186.23',
       database: 'USE InventoryDB',
       uid: process.env.SQL_AUTH_USER || 'john_login_user',
+      port: 2499,
       pwd: process.env.SQL_AUTH_PASSWORD || 'StrongPassword1!'
     },
     {
       name: 'Admin Role',
-      server: process.env.SQL_SERVER_HOST || '163.227.186.23\\SQLEXPRESS',
+      server: '163.227.186.23',
       database: 'USE InventoryDB',
       uid: 'admin_user',
+      port: 2499,
       pwd: process.env.SQL_ADMIN_PASSWORD || 'AdminPass123!'
     },
     {
       name: 'Inventory Operator Role',
-      server: process.env.SQL_SERVER_HOST || '163.227.186.23\\SQLEXPRESS',
+      server: '163.227.186.23',
       database: 'USE InventoryDB',
       uid: 'inventory_operator',
+      port: 2499,
       pwd: process.env.SQL_INVENTORY_OPERATOR_PASSWORD || 'InventoryOp123!'
     }
   ];
@@ -281,7 +285,7 @@ export async function getConnectionStatusSummary(): Promise<{
     authConnectionStatus: 'Disconnected (expected in development)',
     environment: {
       sqlServerMode: process.env.SQL_SERVER === 'true',
-      serverHost: process.env.SQL_SERVER_HOST || '163.227.186.23\\SQLEXPRESS',
+      serverHost: '163.227.186.23:2499',
       database: 'USE InventoryDB',
       authUser: process.env.SQL_AUTH_USER || 'john_login_user'
     },

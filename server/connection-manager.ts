@@ -9,17 +9,16 @@ import sql from 'mssql';
 
 // Connection configurations
 const SERVER_CONFIG = {
-  server: process.env.SQL_SERVER_HOST || '163.227.186.23\\SQLEXPRESS',
+  server: '163.227.186.23',
   database: 'USE InventoryDB',
+  port: 2499,
   options: {
-    encrypt: process.env.SQL_ENCRYPT === 'true' || false,
-    trustServerCertificate: process.env.SQL_TRUST_CERT !== 'false',
+    encrypt: false,
+    trustServerCertificate: true,
     enableArithAbort: true,
-    instanceName: process.env.SQL_INSTANCE || 'SQLEXPRESS',
     connectTimeout: 60000,
     requestTimeout: 60000,
     multipleActiveResultSets: true,
-    port: process.env.SQL_PORT ? parseInt(process.env.SQL_PORT) : undefined,
   },
   pool: {
     max: 10,
