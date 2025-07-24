@@ -156,14 +156,16 @@ export default function Login() {
                     name="email"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Email</FormLabel>
+                        <FormLabel>Email or Username</FormLabel>
                         <FormControl>
                           <Input
-                            type="email"
-                            placeholder="Enter your email"
+                            placeholder="Enter your email or username"
                             {...field}
                           />
                         </FormControl>
+                        <p className="text-xs text-muted-foreground">
+                          You can sign in with either your email address or username
+                        </p>
                         <FormMessage />
                       </FormItem>
                     )}
@@ -206,10 +208,11 @@ export default function Login() {
                 <Info className="h-4 w-4" />
                 <AlertDescription>
                   <strong>Demo Credentials:</strong><br />
-                  Admin: admin@inventory.com / password123<br />
-                  Manager: manager@inventory.com / manager123<br />
-                  Operator: operator@inventory.com / operator123<br />
-                  Viewer: viewer@inventory.com / viewer123
+                  You can login with either email or username:<br />
+                  Admin: admin@inventory.com (or "admin") / password123<br />
+                  Manager: manager@inventory.com (or "manager") / manager123<br />
+                  Operator: operator@inventory.com (or "operator") / operator123<br />
+                  Viewer: viewer@inventory.com (or "viewer") / viewer123
                 </AlertDescription>
               </Alert>
             </TabsContent>
