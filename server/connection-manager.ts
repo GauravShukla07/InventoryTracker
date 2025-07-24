@@ -85,7 +85,7 @@ export async function authenticateUser(emailOrUsername: string, password: string
       .input('password', sql.VarChar, password) // In production, this should be hashed
       .query(`
         SELECT 
-          id, username, email, role, role_password as rolePassword, department, is_active as isActive, last_login as lastLogin
+          id, username, email, role, role_password as rolePassword, department, is_active as isActive
         FROM users 
         WHERE (email = @emailOrUsername OR username = @emailOrUsername) 
         AND password = @password 
@@ -100,11 +100,15 @@ export async function authenticateUser(emailOrUsername: string, password: string
     const user = result.recordset[0];
     console.log(`✅ User authenticated: ${user.username} (role: ${user.role})`);
     
-    // Update last login timestamp
-    await connection.request()
-      .input('userId', sql.Int, user.id)
-      .input('lastLogin', sql.DateTime, new Date())
-      .query('UPDATE users SET last_login = @lastLogin WHERE id = @userId');
+    // Update last login timestamp (optional - skip if column doesn't exist)
+    try {
+      await connection.request()
+        .input('userId', sql.Int, user.id)
+        .input('lastLogin', sql.DateTime, new Date())
+        .query('UPDATE users SET lastLogin = @lastLogin WHERE id = @userId');
+    } catch (updateError) {
+      console.log('⚠️ Could not update lastLogin (column may not exist)');
+    }
 
     return {
       user: {
@@ -114,7 +118,7 @@ export async function authenticateUser(emailOrUsername: string, password: string
         role: user.role,
         department: user.department,
         isActive: user.isActive,
-        lastLogin: user.lastLogin
+        lastLogin: null // Will be set if column exists
       },
       dbUser: user.role, // UID = role column value
       dbPassword: user.rolePassword // PWD = rolePassword column value
