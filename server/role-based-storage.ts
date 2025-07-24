@@ -456,24 +456,9 @@ export class RoleBasedSqlServerStorage implements IStorage {
 
   // Additional required methods from IStorage interface
   async updateUserLastLogin(id: number): Promise<void> {
-    try {
-      if (!this.currentSessionId) {
-        // Use auth connection for this operation
-        await executeAuthQuery(
-          'UPDATE users SET last_login = @lastLogin WHERE id = @id',
-          { id, lastLogin: new Date() }
-        );
-        return;
-      }
-
-      await executeUserQuery(
-        this.currentSessionId,
-        'UPDATE users SET last_login = @lastLogin WHERE id = @id',
-        { id, lastLogin: new Date() }
-      );
-    } catch (error: any) {
-      console.error('Error updating user last login:', error.message);
-    }
+    // Skip last login update - column doesn't exist in SQL Server table
+    console.log('⚠️ Skipping lastLogin update - column not available in database');
+    return;
   }
 
   async getTransfersByAsset(assetId: number): Promise<Transfer[]> {

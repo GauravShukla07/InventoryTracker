@@ -1,63 +1,80 @@
-import sql from 'mssql';
-
 /**
- * Connection Manager for Two-Tier Authentication System
+ * FILE ROLE: SQL Server Connection Manager for Two-Tier Authentication
  * 
- * 1. Initial connection with low-privilege user (john) for authentication
- * 2. Dynamic connection switching based on user role after login
+ * FUNCTIONS:
+ * - Manages SQL Server connection pooling for authentication and role-based access
+ * - Handles two-tier authentication: john_login_user → role-specific user
+ * - Validates user credentials against Users table with minimal privileges
+ * - Extracts role and rolePassword from Users table for dynamic connection switching
+ * - Provides session-based connection management with proper cleanup
+ * - Implements enterprise security patterns with connection isolation
+ * 
+ * KEY METHODS:
+ * - initializeAuthConnection(): Establishes john_login_user connection
+ * - authenticateUser(): Validates credentials and extracts role info
+ * - createRoleConnection(): Creates connection with role-specific credentials
+ * - getSessionConnection(): Retrieves existing session connections
+ * - closeSessionConnection(): Cleanup for session termination
  */
 
-// Connection configurations
+import sql from 'mssql'; // Microsoft SQL Server driver for Node.js
+
+// Base server connection configuration for SQL Server at 163.227.186.23:2499
 const SERVER_CONFIG = {
-  server: '163.227.186.23',
-  database: 'USE InventoryDB',
-  port: 2499,
+  server: '163.227.186.23',          // Windows SQL Server IP address
+  database: 'USE InventoryDB',       // Target database name
+  port: 2499,                        // SQL Server port (non-standard for security)
   options: {
-    encrypt: false,
-    trustServerCertificate: true,
-    enableArithAbort: true,
-    connectTimeout: 60000,
-    requestTimeout: 60000,
-    multipleActiveResultSets: true,
+    encrypt: false,                  // Disable encryption for internal network
+    trustServerCertificate: true,    // Trust self-signed certificates  
+    enableArithAbort: true,          // Enable arithmetic abort for better error handling
+    connectTimeout: 60000,           // Connection timeout (60 seconds)
+    requestTimeout: 60000,           // Query timeout (60 seconds)
+    multipleActiveResultSets: true,  // Allow multiple result sets per connection
   },
   pool: {
-    max: 10,
-    min: 0,
-    idleTimeoutMillis: 30000
+    max: 10,                         // Maximum connections in pool
+    min: 0,                          // Minimum connections in pool
+    idleTimeoutMillis: 30000         // Idle timeout before connection closes
   }
 };
 
-// Initial authentication user (read-only access to users table)
+// Authentication user configuration (john_login_user with read-only access to Users table)
 const AUTH_USER_CONFIG: sql.config = {
-  ...SERVER_CONFIG,
-  user: process.env.SQL_AUTH_USER || 'john_login_user',
-  password: process.env.SQL_AUTH_PASSWORD || 'StrongPassword1!',
+  ...SERVER_CONFIG,                                                    // Inherit base server config
+  user: process.env.SQL_AUTH_USER || 'john_login_user',               // Low-privilege authentication user
+  password: process.env.SQL_AUTH_PASSWORD || 'StrongPassword1!',      // Authentication password from environment
 };
 
-// Active connection pools by session
-const sessionConnections = new Map<string, sql.ConnectionPool>();
-let authConnection: sql.ConnectionPool | null = null;
+// Global connection state management
+const sessionConnections = new Map<string, sql.ConnectionPool>();     // Maps session IDs to role-specific connections
+let authConnection: sql.ConnectionPool | null = null;                 // Singleton authentication connection
 
 /**
- * Initialize the authentication connection (john user)
- * This connection is used for login verification only
+ * Initialize the authentication connection using john_login_user
+ * This connection provides read-only access to Users table for credential validation
+ * Returns existing connection if already established, creates new one if needed
+ * 
+ * @returns Promise<sql.ConnectionPool | null> - Authentication connection or null on failure
  */
 export async function initializeAuthConnection(): Promise<sql.ConnectionPool | null> {
   try {
+    // Return existing connection if available and connected
     if (authConnection && authConnection.connected) {
       return authConnection;
     }
 
     console.log('🔧 Initializing authentication connection as john_login_user...');
+    // Create new connection pool with authentication user credentials
     authConnection = new sql.ConnectionPool(AUTH_USER_CONFIG);
-    await authConnection.connect();
+    await authConnection.connect();  // Establish connection to SQL Server
     
     console.log('✅ Authentication connection established');
     return authConnection;
     
   } catch (error: any) {
     console.error('❌ Failed to initialize authentication connection:', error.message);
-    authConnection = null;
+    authConnection = null;  // Reset connection on failure
     return null;
   }
 }
