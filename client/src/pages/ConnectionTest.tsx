@@ -9,7 +9,8 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Separator } from "@/components/ui/separator";
-import { Database, CheckCircle, XCircle, Clock, Server, Shield, AlertTriangle } from "lucide-react";
+import { Database, CheckCircle, XCircle, Clock, Server, Shield, AlertTriangle, ArrowLeft } from "lucide-react";
+import { Link } from "wouter";
 
 interface ConnectionParams {
   server: string;
@@ -131,9 +132,17 @@ export default function ConnectionTest() {
 
   return (
     <div className="container mx-auto py-6 space-y-6">
-      <div className="flex items-center space-x-2">
-        <Database className="h-6 w-6" />
-        <h1 className="text-2xl font-bold">Database Connection Test</h1>
+      <div className="flex items-center justify-between">
+        <div className="flex items-center space-x-2">
+          <Database className="h-6 w-6" />
+          <h1 className="text-2xl font-bold">Database Connection Test</h1>
+        </div>
+        <Link href="/login">
+          <Button variant="outline" className="flex items-center gap-2">
+            <ArrowLeft className="w-4 h-4" />
+            Back to Login
+          </Button>
+        </Link>
       </div>
       
       <p className="text-muted-foreground">
