@@ -71,16 +71,15 @@ app.use(session({
     checkPeriod: 86400000 // prune expired entries every 24h
   }),
   secret: process.env.SESSION_SECRET || 'inventory-management-secret-key-for-development',
-  resave: true, // Force session save even if unmodified
-  saveUninitialized: true, // Save uninitialized sessions
-  rolling: true, // Reset expiration on every request
+  resave: false,    // Don't save session if unmodified (recommended)
+  saveUninitialized: false, // Don't create session until something stored (recommended)
+  rolling: true,    // Reset expiration on every request
   cookie: {
-    secure: false,         // Set to false for HTTP (development)
-    httpOnly: false,       // Allow client-side access for debugging
+    secure: false,    // False for HTTP development
+    httpOnly: false,  // Allow JavaScript access for debugging
     maxAge: 24 * 60 * 60 * 1000, // 24 hours
-    sameSite: 'lax',       // Changed from 'none' to 'lax' for better compatibility
-    domain: undefined,     // Auto-detect domain
-    path: '/'              // Available on all paths
+    sameSite: 'lax',  // Lax for cross-origin compatibility
+    path: '/'         // Available on all paths
   },
   name: 'sessionid'
 }));

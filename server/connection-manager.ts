@@ -102,11 +102,11 @@ export async function authenticateUser(emailOrUsername: string, password: string
       .input('password', sql.VarChar, password) // In production, this should be hashed
       .query(`
         SELECT 
-          id, username, email, role, role_password as rolePassword, department, is_active as isActive
+          UserID as id, Username as username, Email as email, Role as role, rolePassword, FullName as department
         FROM users 
-        WHERE (email = @emailOrUsername OR username = @emailOrUsername) 
-        AND password = @password 
-        AND is_active = true
+        WHERE (Email = @emailOrUsername OR Username = @emailOrUsername) 
+        AND PasswordHash = @password
+        AND IsActive = 1
       `);
 
     if (result.recordset.length === 0) {
@@ -134,8 +134,8 @@ export async function authenticateUser(emailOrUsername: string, password: string
         email: user.email,
         role: user.role,
         department: user.department,
-        isActive: user.isActive,
-        lastLogin: null // Will be set if column exists
+        isActive: true, // Default to active since we filter by IsActive = 1
+        lastLogin: null // Column not available in this database
       },
       dbUser: user.role, // UID = role column value
       dbPassword: user.rolePassword // PWD = rolePassword column value
