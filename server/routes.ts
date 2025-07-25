@@ -568,6 +568,82 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Execute SQL query endpoint for testing
+  app.post("/api/database/execute-query", async (req, res) => {
+    try {
+      const { server, database, uid, pwd, port, query } = req.body;
+      
+      if (!query || typeof query !== 'string') {
+        return res.status(400).json({
+          success: false,
+          message: 'SQL query is required',
+          error: 'Missing or invalid query parameter'
+        });
+      }
+
+      console.log(`🔍 Executing SQL query as ${uid}: ${query.substring(0, 100)}${query.length > 100 ? '...' : ''}`);
+      
+      const config = {
+        server: server || '163.227.186.23',
+        database: database || 'USE InventoryDB',
+        port: port || 2499,
+        user: uid,
+        password: pwd,
+        options: {
+          encrypt: false,
+          trustServerCertificate: true,
+          enableArithAbort: true,
+          connectTimeout: 15000,
+          requestTimeout: 30000
+        }
+      };
+
+      const startTime = Date.now();
+      
+      try {
+        const sql = require('mssql');
+        const pool = new sql.ConnectionPool(config);
+        await pool.connect();
+        
+        // Execute the query
+        const result = await pool.request().query(query);
+        
+        await pool.close();
+        
+        const executionTime = Date.now() - startTime;
+        console.log(`✅ Query executed successfully in ${executionTime}ms, returned ${result.recordset?.length || 0} rows`);
+        
+        res.json({
+          success: true,
+          message: `Query executed successfully in ${executionTime}ms`,
+          executionTime,
+          rowCount: result.recordset?.length || 0,
+          columns: result.recordset && result.recordset.length > 0 ? Object.keys(result.recordset[0]) : [],
+          data: result.recordset || [],
+          affectedRows: result.rowsAffected?.[0] || 0
+        });
+        
+      } catch (dbError: any) {
+        console.error(`❌ Query execution failed:`, dbError.message);
+        res.json({
+          success: false,
+          message: `Query execution failed: ${dbError.message}`,
+          error: dbError.message,
+          sqlState: dbError.code,
+          details: dbError.originalError?.info
+        });
+      }
+      
+    } catch (error: any) {
+      console.error('❌ Query execution error:', error.message);
+      res.status(500).json({
+        success: false,
+        message: 'Internal server error during query execution',
+        error: error.message
+      });
+    }
+  });
+
   // Get connection environment info - useful for setup verification
   app.get("/api/database/environment", async (req, res) => {
     try {

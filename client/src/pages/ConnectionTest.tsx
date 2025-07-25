@@ -35,6 +35,19 @@ interface ConnectionResult {
   error?: string;
 }
 
+interface QueryResult {
+  success: boolean;
+  message: string;
+  executionTime?: number;
+  rowCount?: number;
+  columns?: string[];
+  data?: any[];
+  affectedRows?: number;
+  error?: string;
+  sqlState?: string;
+  details?: any;
+}
+
 export default function ConnectionTest() {
   const [connectionParams, setConnectionParams] = useState<ConnectionParams>({
     server: '163.227.186.23',
@@ -50,12 +63,50 @@ export default function ConnectionTest() {
   const [isLoading, setIsLoading] = useState(false);
   const [presetResults, setPresetResults] = useState<ConnectionResult[]>([]);
   const [environmentInfo, setEnvironmentInfo] = useState<any>(null);
+  const [sqlQuery, setSqlQuery] = useState('SELECT * FROM users');
+  const [queryResult, setQueryResult] = useState<QueryResult | null>(null);
+  const [isQueryLoading, setIsQueryLoading] = useState(false);
 
   const handleInputChange = (field: keyof ConnectionParams, value: string | boolean | number) => {
     setConnectionParams(prev => ({
       ...prev,
       [field]: value
     }));
+  };
+
+  const executeQuery = async () => {
+    if (!connectionParams.uid || !connectionParams.pwd) {
+      alert('Please fill in username and password first');
+      return;
+    }
+
+    setIsQueryLoading(true);
+    setQueryResult(null);
+
+    try {
+      const response = await fetch('/api/database/execute-query', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          ...connectionParams,
+          port: 2499,
+          query: sqlQuery
+        })
+      });
+
+      const result = await response.json();
+      setQueryResult(result);
+    } catch (error) {
+      setQueryResult({
+        success: false,
+        message: 'Failed to execute query',
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+    } finally {
+      setIsQueryLoading(false);
+    }
   };
 
   const testConnection = async () => {
@@ -153,6 +204,7 @@ export default function ConnectionTest() {
       <Tabs defaultValue="custom" className="space-y-4">
         <TabsList>
           <TabsTrigger value="custom">Custom Connection</TabsTrigger>
+          <TabsTrigger value="query">SQL Query</TabsTrigger>
           <TabsTrigger value="presets">Test Presets</TabsTrigger>
           <TabsTrigger value="environment">Environment Info</TabsTrigger>
         </TabsList>
@@ -362,6 +414,176 @@ export default function ConnectionTest() {
               </CardContent>
             </Card>
           )}
+        </TabsContent>
+
+        <TabsContent value="query" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center space-x-2">
+                <Database className="h-5 w-5" />
+                <span>SQL Query Execution</span>
+              </CardTitle>
+              <CardDescription>
+                Execute SQL queries against the database using your connection credentials
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {/* Connection Status Check */}
+              {(!connectionParams.uid || !connectionParams.pwd) && (
+                <Alert>
+                  <AlertTriangle className="h-4 w-4" />
+                  <AlertDescription>
+                    Please set username and password in the Custom Connection tab first
+                  </AlertDescription>
+                </Alert>
+              )}
+
+              {/* Query Input */}
+              <div className="space-y-2">
+                <Label htmlFor="sqlQuery">SQL Query</Label>
+                <Textarea
+                  id="sqlQuery"
+                  value={sqlQuery}
+                  onChange={(e) => setSqlQuery(e.target.value)}
+                  placeholder="SELECT * FROM users"
+                  rows={6}
+                  className="font-mono text-sm"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Enter your SQL query above. Examples: SELECT, INSERT, UPDATE, DELETE
+                </p>
+              </div>
+
+              {/* Quick Query Buttons */}
+              <div className="space-y-2">
+                <Label>Quick Queries</Label>
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setSqlQuery('SELECT * FROM users')}
+                  >
+                    All Users
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setSqlQuery('SELECT UserID, Username, Email, Role FROM users WHERE IsActive = 1')}
+                  >
+                    Active Users
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setSqlQuery('SELECT COLUMN_NAME, DATA_TYPE FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = \'users\'')}
+                  >
+                    User Table Schema
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setSqlQuery('SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_TYPE = \'BASE TABLE\'')}
+                  >
+                    All Tables
+                  </Button>
+                </div>
+              </div>
+
+              {/* Execute Button */}
+              <Button
+                onClick={executeQuery}
+                disabled={isQueryLoading || !connectionParams.uid || !connectionParams.pwd || !sqlQuery.trim()}
+                className="w-full"
+              >
+                {isQueryLoading ? (
+                  <>
+                    <Clock className="mr-2 h-4 w-4 animate-spin" />
+                    Executing Query...
+                  </>
+                ) : (
+                  <>
+                    <Database className="mr-2 h-4 w-4" />
+                    Execute Query
+                  </>
+                )}
+              </Button>
+
+              {/* Query Result */}
+              {queryResult && (
+                <div className="space-y-4">
+                  <Separator />
+                  <div>
+                    <h3 className="font-medium mb-2">Query Result</h3>
+                    <Alert className={queryResult.success ? "border-green-200 bg-green-50 dark:bg-green-900/20" : "border-red-200 bg-red-50 dark:bg-red-900/20"}>
+                      {queryResult.success ? (
+                        <CheckCircle className="h-4 w-4 text-green-600" />
+                      ) : (
+                        <XCircle className="h-4 w-4 text-red-600" />
+                      )}
+                      <AlertDescription>
+                        <div className="space-y-2">
+                          <p className={queryResult.success ? "text-green-800 dark:text-green-200" : "text-red-800 dark:text-red-200"}>
+                            {queryResult.message}
+                          </p>
+                          {queryResult.success && (
+                            <div className="text-sm text-muted-foreground">
+                              <p>Execution time: {queryResult.executionTime}ms</p>
+                              <p>Rows returned: {queryResult.rowCount}</p>
+                              {queryResult.affectedRows > 0 && <p>Affected rows: {queryResult.affectedRows}</p>}
+                            </div>
+                          )}
+                          {!queryResult.success && queryResult.error && (
+                            <div className="text-sm text-red-700 dark:text-red-300 mt-2">
+                              <p><strong>Error:</strong> {queryResult.error}</p>
+                              {queryResult.sqlState && <p><strong>SQL State:</strong> {queryResult.sqlState}</p>}
+                            </div>
+                          )}
+                        </div>
+                      </AlertDescription>
+                    </Alert>
+
+                    {/* Data Results Table */}
+                    {queryResult.success && queryResult.data && queryResult.data.length > 0 && (
+                      <div className="mt-4">
+                        <h4 className="font-medium mb-2">Query Results ({queryResult.rowCount} rows)</h4>
+                        <div className="border rounded-md overflow-auto max-h-96">
+                          <table className="w-full text-sm">
+                            <thead className="bg-muted">
+                              <tr>
+                                {queryResult.columns?.map((column, index) => (
+                                  <th key={index} className="p-2 text-left font-medium border-r">
+                                    {column}
+                                  </th>
+                                ))}
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {queryResult.data.map((row, rowIndex) => (
+                                <tr key={rowIndex} className={rowIndex % 2 === 0 ? "bg-background" : "bg-muted/50"}>
+                                  {queryResult.columns?.map((column, colIndex) => (
+                                    <td key={colIndex} className="p-2 border-r font-mono text-xs">
+                                      {row[column] !== null ? String(row[column]) : <span className="text-muted-foreground italic">NULL</span>}
+                                    </td>
+                                  ))}
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Empty Result */}
+                    {queryResult.success && queryResult.rowCount === 0 && (
+                      <div className="mt-4 p-4 bg-muted/50 rounded-md text-center text-muted-foreground">
+                        Query executed successfully but returned no rows
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
         </TabsContent>
 
         <TabsContent value="presets" className="space-y-4">
