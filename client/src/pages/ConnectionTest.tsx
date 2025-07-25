@@ -118,6 +118,7 @@ export default function ConnectionTest() {
   const [isLoading, setIsLoading] = useState(false);                                  // Connection test loading state
   const [presetResults, setPresetResults] = useState<ConnectionResult[]>([]);         // Results from preset connection tests
   const [environmentInfo, setEnvironmentInfo] = useState<any>(null);                  // System environment information
+  const [isConnected, setIsConnected] = useState(false);                             // Track successful connection state
   
   // SQL QUERY EXECUTION STATE MANAGEMENT
   const [sqlQuery, setSqlQuery] = useState('SELECT * FROM users');                    // Current SQL query text
@@ -137,19 +138,40 @@ export default function ConnectionTest() {
       ...prev,              // Preserve existing connection parameters
       [field]: value        // Update the specified field with new value
     }));
+    
+    // RESET CONNECTION STATE WHEN PARAMETERS CHANGE
+    // Force user to re-test connection when credentials or settings change
+    if (field === 'uid' || field === 'pwd' || field === 'server' || field === 'database') {
+      setIsConnected(false);
+      setTestResult(null);
+      setQueryResult(null);  // Clear query results since connection changed
+    }
   };
 
   /**
    * EXECUTE SQL QUERY
-   * Sends SQL query to backend for execution using current connection parameters
+   * Sends SQL query to backend for execution using established connection
+   * Requires successful connection test before allowing query execution
    * Provides comprehensive error handling and result display capabilities
-   * Validates credentials before attempting query execution
    */
   const executeQuery = async () => {
+    // CONNECTION STATE VALIDATION
+    // Ensure connection has been tested and is successful before allowing queries
+    if (!isConnected || !testResult?.success) {
+      alert('Please test the connection first and ensure it is successful before running queries');
+      return;
+    }
+
     // CREDENTIAL VALIDATION
-    // Ensure username and password are provided before attempting query execution
+    // Double-check that credentials are still available
     if (!connectionParams.uid || !connectionParams.pwd) {
-      alert('Please fill in username and password first');
+      alert('Connection credentials are missing. Please test connection again.');
+      return;
+    }
+
+    // QUERY VALIDATION
+    if (!sqlQuery.trim()) {
+      alert('Please enter a SQL query to execute');
       return;
     }
 
@@ -158,17 +180,18 @@ export default function ConnectionTest() {
     setQueryResult(null);           // Clear previous query results
 
     try {
-      // SEND QUERY TO BACKEND API
-      // POST request to execute-query endpoint with connection params and SQL query
+      // SEND QUERY TO BACKEND API USING ESTABLISHED CONNECTION
+      // POST request to execute-query endpoint with verified connection params and SQL query
       const response = await fetch('/api/database/execute-query', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',    // JSON payload for API request
         },
         body: JSON.stringify({
-          ...connectionParams,      // Include all connection configuration
+          ...connectionParams,      // Include all verified connection configuration
           port: 2499,              // Fixed port for SQL Server
-          query: sqlQuery          // SQL query text to execute
+          query: sqlQuery,         // SQL query text to execute
+          useEstablishedConnection: true  // Flag to indicate using established connection
         })
       });
 
@@ -218,6 +241,7 @@ export default function ConnectionTest() {
       // PROCESS CONNECTION TEST RESPONSE
       const result = await response.json();      // Parse JSON response from backend
       setTestResult(result);                     // Update UI with connection test results
+      setIsConnected(result.success);            // Track successful connection state for query execution
       
     } catch (error) {
       // HANDLE CONNECTION TEST ERRORS
@@ -227,6 +251,7 @@ export default function ConnectionTest() {
         message: 'Failed to test connection',
         error: error instanceof Error ? error.message : 'Network error occurred'
       });
+      setIsConnected(false);        // Mark connection as failed
     } finally {
       // CLEANUP LOADING STATE
       setIsLoading(false);          // Hide loading spinner regardless of result
@@ -296,6 +321,11 @@ export default function ConnectionTest() {
       ...prev,                      // Preserve existing connection settings
       ...defaults[preset]           // Override with selected preset credentials
     }));
+    
+    // RESET CONNECTION STATE
+    // Clear connection state when credentials change to force re-testing
+    setIsConnected(false);
+    setTestResult(null);
   };
 
   // Load environment info on component mount
@@ -551,11 +581,20 @@ export default function ConnectionTest() {
             </CardHeader>
             <CardContent className="space-y-4">
               {/* Connection Status Check */}
-              {(!connectionParams.uid || !connectionParams.pwd) && (
+              {!isConnected && (
                 <Alert>
                   <AlertTriangle className="h-4 w-4" />
                   <AlertDescription>
-                    Please set username and password in the Custom Connection tab first
+                    Please test the connection successfully in the Custom Connection tab before executing queries
+                  </AlertDescription>
+                </Alert>
+              )}
+
+              {isConnected && (
+                <Alert className="border-green-200 bg-green-50 dark:bg-green-900/20">
+                  <CheckCircle className="h-4 w-4 text-green-600" />
+                  <AlertDescription className="text-green-800 dark:text-green-200">
+                    Connection established successfully. You can now execute SQL queries.
                   </AlertDescription>
                 </Alert>
               )}
@@ -614,7 +653,7 @@ export default function ConnectionTest() {
               {/* Execute Button */}
               <Button
                 onClick={executeQuery}
-                disabled={isQueryLoading || !connectionParams.uid || !connectionParams.pwd || !sqlQuery.trim()}
+                disabled={isQueryLoading || !isConnected || !sqlQuery.trim()}
                 className="w-full"
               >
                 {isQueryLoading ? (

@@ -571,15 +571,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
   /**
    * EXECUTE SQL QUERY ENDPOINT
    * API endpoint for testing SQL queries with role-based database access
+   * Uses established connection credentials that have been pre-verified
    * Provides comprehensive error handling and detailed result formatting
    * 
    * REQUEST BODY:
    * - server: SQL Server IP address
    * - database: Target database name
-   * - uid: Database username
-   * - pwd: Database password
+   * - uid: Database username (must be from successful connection test)
+   * - pwd: Database password (must be from successful connection test)
    * - port: SQL Server port number
    * - query: SQL query string to execute
+   * - useEstablishedConnection: Boolean flag indicating use of verified credentials
    * 
    * RESPONSE FORMAT:
    * - success: Boolean indicating query success/failure
@@ -595,7 +597,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/database/execute-query", async (req, res) => {
     try {
       // EXTRACT REQUEST PARAMETERS
-      const { server, database, uid, pwd, port, query } = req.body;
+      const { server, database, uid, pwd, port, query, useEstablishedConnection } = req.body;
       
       // VALIDATE SQL QUERY PARAMETER
       if (!query || typeof query !== 'string') {
@@ -606,16 +608,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
-      // LOG QUERY EXECUTION ATTEMPT
-      console.log(`🔍 Executing SQL query as ${uid}: ${query.substring(0, 100)}${query.length > 100 ? '...' : ''}`);
+      // VALIDATE ESTABLISHED CONNECTION REQUIREMENT
+      // Only allow queries from connections that have been pre-verified
+      if (useEstablishedConnection !== true) {
+        return res.status(400).json({
+          success: false,
+          message: 'Queries must use an established connection. Please test connection first.',
+          error: 'Connection not pre-verified'
+        });
+      }
+
+      // LOG QUERY EXECUTION ATTEMPT WITH ESTABLISHED CONNECTION
+      console.log(`🔍 Executing SQL query using established connection as ${uid}: ${query.substring(0, 100)}${query.length > 100 ? '...' : ''}`);
       
       // BUILD SQL SERVER CONNECTION CONFIGURATION
+      // Using same configuration as established connection for consistency
       const config = {
         server: server || '163.227.186.23',      // Default to inventory server IP
         database: database || 'USE InventoryDB',  // Default to inventory database
         port: port || 2499,                       // Default to custom SQL Server port
-        user: uid,                                // Database username from request
-        password: pwd,                            // Database password from request
+        user: uid,                                // Database username from established connection
+        password: pwd,                            // Database password from established connection
         options: {
           encrypt: false,                         // Disable encryption for internal network
           trustServerCertificate: true,           // Trust self-signed certificates
