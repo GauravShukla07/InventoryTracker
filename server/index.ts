@@ -75,12 +75,12 @@ app.use(session({
   saveUninitialized: true, // Save uninitialized sessions
   rolling: true, // Reset expiration on every request
   cookie: {
-    secure: false,
-    httpOnly: false, // Allow client-side access for debugging
-    maxAge: 24 * 60 * 60 * 1000,
-    sameSite: 'none', // Use 'none' for cross-origin requests in Replit
-    domain: undefined,
-    path: '/'
+    secure: false,         // Set to false for HTTP (development)
+    httpOnly: false,       // Allow client-side access for debugging
+    maxAge: 24 * 60 * 60 * 1000, // 24 hours
+    sameSite: 'lax',       // Changed from 'none' to 'lax' for better compatibility
+    domain: undefined,     // Auto-detect domain
+    path: '/'              // Available on all paths
   },
   name: 'sessionid'
 }));

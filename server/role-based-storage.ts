@@ -93,7 +93,7 @@ export class RoleBasedSqlServerStorage implements IStorage {
 
       const result = await executeUserQuery(
         this.currentSessionId,
-        'SELECT id, username, email, role, department, is_active as isActive, last_login as lastLogin FROM users WHERE id = @userId',
+        'SELECT id, username, email, role, department, is_active as isActive FROM users WHERE id = @userId',
         { userId: id }
       );
       
@@ -115,7 +115,7 @@ export class RoleBasedSqlServerStorage implements IStorage {
     try {
       // Use auth connection for login verification
       const result = await executeAuthQuery(
-        'SELECT id, username, email, role, role_password as rolePassword, department, is_active as isActive, last_login as lastLogin FROM users WHERE email = @email',
+        'SELECT id, username, email, role, role_password as rolePassword, department, is_active as isActive FROM users WHERE email = @email',
         { email }
       );
       
@@ -130,7 +130,7 @@ export class RoleBasedSqlServerStorage implements IStorage {
     try {
       // Use auth connection for login verification
       const result = await executeAuthQuery(
-        'SELECT id, username, email, role, role_password as rolePassword, department, is_active as isActive, last_login as lastLogin FROM users WHERE username = @username',
+        'SELECT id, username, email, role, role_password as rolePassword, department, is_active as isActive FROM users WHERE username = @username',
         { username }
       );
       
@@ -149,7 +149,7 @@ export class RoleBasedSqlServerStorage implements IStorage {
 
       const result = await executeUserQuery(
         this.currentSessionId,
-        'SELECT id, username, email, role, department, is_active as isActive, last_login as lastLogin FROM users ORDER BY username'
+        'SELECT id, username, email, role, department, is_active as isActive FROM users ORDER BY username'
       );
       
       return result.recordset;
