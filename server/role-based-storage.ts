@@ -1,25 +1,57 @@
-import { 
-  initializeAuthConnection, 
-  authenticateUser, 
-  createUserConnection, 
-  getSessionConnection,
-  executeUserQuery, 
-  executeAuthQuery,
-  closeSessionConnection 
-} from './connection-manager';
-import type { IStorage } from './storage';
-import type { 
-  User, Asset, Transfer, Repair, 
-  InsertUser, InsertAsset, InsertTransfer, InsertRepair 
-} from '@shared/schema';
-
 /**
- * Role-Based SQL Server Storage Implementation
+ * FILE ROLE: Role-Based SQL Server Storage Implementation
  * 
- * Uses two-tier authentication:
- * 1. john_login_user for authentication queries
- * 2. Role-based users (admin, manager, operator, viewer) for operations
+ * PURPOSE: 
+ * Implements the IStorage interface using Microsoft SQL Server with a sophisticated
+ * two-tier authentication system. Provides enterprise-grade security through role-based
+ * database user connections while maintaining session isolation and proper privilege separation.
+ * 
+ * AUTHENTICATION FLOW:
+ * 1. john_login_user validates credentials against Users table (minimal privileges)
+ * 2. System extracts role and rolePassword from Users table
+ * 3. Creates dedicated connection using role-specific database user
+ * 4. All subsequent operations use role-specific connection with appropriate privileges
+ * 
+ * DATABASE SCHEMA MAPPING:
+ * - UserID (int) → id (application ID)
+ * - Username (varchar) → username (login identifier)
+ * - Email (varchar) → email (contact information)
+ * - Role (varchar) → role (application role: admin, manager, operator, viewer)
+ * - FullName (varchar) → department (display name/department)
+ * - PasswordHash (varchar) → password validation
+ * - rolePassword (varchar) → database user password for role-specific connections
+ * - IsActive (bit) → isActive (account status)
+ * 
+ * CONNECTION MANAGEMENT:
+ * - Session-based connection pooling for scalability
+ * - Automatic cleanup on session termination
+ * - Role-specific privilege enforcement at database level
+ * - Connection reuse for performance optimization
+ * 
+ * SECURITY FEATURES:
+ * - Principle of least privilege through role-based database users
+ * - Connection isolation between user sessions
+ * - SQL injection prevention through parameterized queries
+ * - Credential extraction from secure database storage
  */
+
+// Import connection management functions for two-tier authentication
+import { 
+  initializeAuthConnection,    // Establishes john_login_user connection for authentication
+  authenticateUser,           // Validates user credentials and extracts role information
+  createUserConnection,       // Creates role-specific database connection
+  getSessionConnection,       // Retrieves existing session connections
+  executeUserQuery,           // Executes queries with role-specific permissions
+  executeAuthQuery,           // Executes authentication queries with minimal privileges
+  closeSessionConnection     // Cleanup for session termination
+} from './connection-manager';
+
+// Import storage interface and schema types
+import type { IStorage } from './storage';              // Storage interface definition
+import type { 
+  User, Asset, Transfer, Repair,                        // Entity types for database operations
+  InsertUser, InsertAsset, InsertTransfer, InsertRepair // Insert schema types for data validation
+} from '@shared/schema';
 export class RoleBasedSqlServerStorage implements IStorage {
   private currentSessionId: string | null = null;
 

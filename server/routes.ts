@@ -568,11 +568,36 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Execute SQL query endpoint for testing
+  /**
+   * EXECUTE SQL QUERY ENDPOINT
+   * API endpoint for testing SQL queries with role-based database access
+   * Provides comprehensive error handling and detailed result formatting
+   * 
+   * REQUEST BODY:
+   * - server: SQL Server IP address
+   * - database: Target database name
+   * - uid: Database username
+   * - pwd: Database password
+   * - port: SQL Server port number
+   * - query: SQL query string to execute
+   * 
+   * RESPONSE FORMAT:
+   * - success: Boolean indicating query success/failure
+   * - message: Human-readable result message
+   * - executionTime: Query execution time in milliseconds
+   * - rowCount: Number of rows returned by SELECT queries
+   * - columns: Array of column names in result set
+   * - data: Query result data rows
+   * - affectedRows: Number of rows affected by DML operations
+   * - error: Error message if query failed
+   * - sqlState: SQL error state code for debugging
+   */
   app.post("/api/database/execute-query", async (req, res) => {
     try {
+      // EXTRACT REQUEST PARAMETERS
       const { server, database, uid, pwd, port, query } = req.body;
       
+      // VALIDATE SQL QUERY PARAMETER
       if (!query || typeof query !== 'string') {
         return res.status(400).json({
           success: false,
@@ -581,60 +606,71 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
+      // LOG QUERY EXECUTION ATTEMPT
       console.log(`🔍 Executing SQL query as ${uid}: ${query.substring(0, 100)}${query.length > 100 ? '...' : ''}`);
       
+      // BUILD SQL SERVER CONNECTION CONFIGURATION
       const config = {
-        server: server || '163.227.186.23',
-        database: database || 'USE InventoryDB',
-        port: port || 2499,
-        user: uid,
-        password: pwd,
+        server: server || '163.227.186.23',      // Default to inventory server IP
+        database: database || 'USE InventoryDB',  // Default to inventory database
+        port: port || 2499,                       // Default to custom SQL Server port
+        user: uid,                                // Database username from request
+        password: pwd,                            // Database password from request
         options: {
-          encrypt: false,
-          trustServerCertificate: true,
-          enableArithAbort: true,
-          connectTimeout: 15000,
-          requestTimeout: 30000
+          encrypt: false,                         // Disable encryption for internal network
+          trustServerCertificate: true,           // Trust self-signed certificates
+          enableArithAbort: true,                 // Enable arithmetic abort for error handling
+          connectTimeout: 15000,                  // Connection timeout (15 seconds)
+          requestTimeout: 30000                   // Query timeout (30 seconds)
         }
       };
 
+      // START QUERY EXECUTION TIMING
       const startTime = Date.now();
       
       try {
-        const sql = require('mssql');
-        const pool = new sql.ConnectionPool(config);
-        await pool.connect();
+        // ESTABLISH DATABASE CONNECTION
+        // Import mssql module using ES6 dynamic import for Node.js compatibility
+        const sql = await import('mssql');
+        const pool = new sql.default.ConnectionPool(config);  // Create connection pool with config
+        await pool.connect();                                 // Establish connection to SQL Server
         
-        // Execute the query
+        // EXECUTE SQL QUERY
+        // Use connection pool to execute the provided SQL query with proper error handling
         const result = await pool.request().query(query);
         
-        await pool.close();
+        // CLOSE DATABASE CONNECTION
+        await pool.close();        // Clean up connection resources
         
+        // CALCULATE QUERY EXECUTION TIME
         const executionTime = Date.now() - startTime;
         console.log(`✅ Query executed successfully in ${executionTime}ms, returned ${result.recordset?.length || 0} rows`);
         
+        // RETURN SUCCESSFUL QUERY RESULTS
         res.json({
           success: true,
           message: `Query executed successfully in ${executionTime}ms`,
-          executionTime,
-          rowCount: result.recordset?.length || 0,
-          columns: result.recordset && result.recordset.length > 0 ? Object.keys(result.recordset[0]) : [],
-          data: result.recordset || [],
-          affectedRows: result.rowsAffected?.[0] || 0
+          executionTime,                                                                        // Time taken to execute query
+          rowCount: result.recordset?.length || 0,                                            // Number of rows returned
+          columns: result.recordset && result.recordset.length > 0 ? Object.keys(result.recordset[0]) : [], // Column names
+          data: result.recordset || [],                                                       // Query result data
+          affectedRows: result.rowsAffected?.[0] || 0                                        // Rows affected by DML operations
         });
         
       } catch (dbError: any) {
+        // HANDLE SQL EXECUTION ERRORS
         console.error(`❌ Query execution failed:`, dbError.message);
         res.json({
           success: false,
           message: `Query execution failed: ${dbError.message}`,
-          error: dbError.message,
-          sqlState: dbError.code,
-          details: dbError.originalError?.info
+          error: dbError.message,                    // Error message for display
+          sqlState: dbError.code,                    // SQL error state code
+          details: dbError.originalError?.info       // Additional error details from SQL Server
         });
       }
       
     } catch (error: any) {
+      // HANDLE GENERAL EXECUTION ERRORS
       console.error('❌ Query execution error:', error.message);
       res.status(500).json({
         success: false,

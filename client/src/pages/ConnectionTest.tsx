@@ -1,178 +1,300 @@
-import React, { useState } from "react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Textarea } from "@/components/ui/textarea";
-import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Badge } from "@/components/ui/badge";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Separator } from "@/components/ui/separator";
-import { Database, CheckCircle, XCircle, Clock, Server, Shield, AlertTriangle, ArrowLeft } from "lucide-react";
-import { Link } from "wouter";
+/**
+ * FILE ROLE: Database Connection Testing Utility Component
+ * 
+ * PURPOSE:
+ * Provides a comprehensive testing interface for SQL Server database connections
+ * with role-based authentication testing, SQL query execution, and diagnostic capabilities.
+ * Essential tool for validating database connectivity, user permissions, and troubleshooting.
+ * 
+ * KEY FEATURES:
+ * 1. Connection Testing - Validates database connectivity with custom credentials
+ * 2. SQL Query Execution - Tests queries with role-specific permissions and error handling
+ * 3. Preset Connection Tests - Quick tests for predefined role-based users
+ * 4. Environment Diagnostics - System configuration and connection status information
+ * 
+ * AUTHENTICATION TESTING:
+ * - Tests john_login_user authentication connection
+ * - Validates role-based user connections (admin, manager, operator, viewer)
+ * - Shows detailed error messages for permission violations
+ * - Displays connection timing and server information
+ * 
+ * SQL QUERY CAPABILITIES:
+ * - Execute custom SELECT, INSERT, UPDATE, DELETE queries
+ * - Quick query buttons for common database operations
+ * - Tabular display of query results with proper formatting
+ * - Comprehensive error handling with SQL state codes
+ * - Query execution metrics (timing, row counts, affected rows)
+ * 
+ * DATABASE CONFIGURATION:
+ * - Server: 163.227.186.23 (Windows SQL Server)
+ * - Port: 2499 (non-standard for security)
+ * - Database: USE InventoryDB
+ * - Authentication: SQL Server Authentication
+ * - Connection: Non-encrypted (internal network)
+ */
 
+// React and UI component imports
+import React, { useState } from "react";                                        // React hooks for state management
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";  // Card components for layout
+import { Button } from "@/components/ui/button";                               // Button component for actions
+import { Input } from "@/components/ui/input";                                 // Input component for form fields
+import { Label } from "@/components/ui/label";                                 // Label component for form labels
+import { Checkbox } from "@/components/ui/checkbox";                           // Checkbox for boolean options
+import { Textarea } from "@/components/ui/textarea";                           // Textarea for SQL query input
+import { Alert, AlertDescription } from "@/components/ui/alert";               // Alert components for messages
+import { Badge } from "@/components/ui/badge";                                 // Badge for status indicators
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"; // Tab components for organization
+import { Separator } from "@/components/ui/separator";                         // Visual separator component
+import { Database, CheckCircle, XCircle, Clock, Server, Shield, AlertTriangle, ArrowLeft } from "lucide-react"; // Icons
+import { Link } from "wouter";                                                 // Navigation component
+
+/**
+ * CONNECTION PARAMETERS INTERFACE
+ * Defines the structure for SQL Server connection configuration
+ */
 interface ConnectionParams {
-  server: string;
-  database: string;
-  uid: string;
-  pwd: string;
-  port?: number;
-  encrypt?: boolean;
-  trustServerCertificate?: boolean;
-  connectTimeout?: number;
+  server: string;                    // SQL Server IP address (163.227.186.23)
+  database: string;                  // Target database name (USE InventoryDB)
+  uid: string;                       // Username for SQL Server Authentication
+  pwd: string;                       // Password for SQL Server Authentication
+  port?: number;                     // SQL Server port (2499)
+  encrypt?: boolean;                 // Enable/disable connection encryption
+  trustServerCertificate?: boolean;  // Trust self-signed certificates
+  connectTimeout?: number;           // Connection timeout in milliseconds
 }
 
+/**
+ * CONNECTION TEST RESULT INTERFACE
+ * Contains the results of database connection testing
+ */
 interface ConnectionResult {
-  success: boolean;
-  message: string;
-  connectionTime?: number;
-  serverInfo?: {
-    version?: string;
-    productName?: string;
+  success: boolean;                  // Whether connection was successful
+  message: string;                   // Human-readable result message
+  connectionTime?: number;           // Connection establishment time in ms
+  serverInfo?: {                     // SQL Server information
+    version?: string;                // SQL Server version string
+    productName?: string;            // Product name (Microsoft SQL Server)
   };
-  details?: any;
-  error?: string;
+  details?: any;                     // Additional connection details
+  error?: string;                    // Error message if connection failed
 }
 
+/**
+ * SQL QUERY RESULT INTERFACE
+ * Contains the results of SQL query execution
+ */
 interface QueryResult {
-  success: boolean;
-  message: string;
-  executionTime?: number;
-  rowCount?: number;
-  columns?: string[];
-  data?: any[];
-  affectedRows?: number;
-  error?: string;
-  sqlState?: string;
-  details?: any;
+  success: boolean;                  // Whether query executed successfully
+  message: string;                   // Human-readable result message
+  executionTime?: number;            // Query execution time in milliseconds
+  rowCount?: number;                 // Number of rows returned by SELECT queries
+  columns?: string[];                // Column names in result set
+  data?: any[];                      // Query result data rows
+  affectedRows?: number;             // Number of rows affected by INSERT/UPDATE/DELETE
+  error?: string;                    // Error message if query failed
+  sqlState?: string;                 // SQL error state code
+  details?: any;                     // Additional error details from SQL Server
 }
 
+/**
+ * CONNECTION TEST COMPONENT
+ * Main component for database connection testing and SQL query execution
+ */
 export default function ConnectionTest() {
+  // CONNECTION PARAMETERS STATE
+  // Stores user-configured database connection settings
   const [connectionParams, setConnectionParams] = useState<ConnectionParams>({
-    server: '163.227.186.23',
-    database: 'USE InventoryDB',
-    uid: '',
-    pwd: '',
-    encrypt: false,
-    trustServerCertificate: true,
-    connectTimeout: 15000
+    server: '163.227.186.23',        // Fixed SQL Server IP address
+    database: 'USE InventoryDB',     // Target inventory database
+    uid: '',                         // User-provided database username
+    pwd: '',                         // User-provided database password
+    encrypt: false,                  // Disabled for internal network
+    trustServerCertificate: true,    // Trust self-signed certificates
+    connectTimeout: 15000            // 15-second connection timeout
   });
 
-  const [testResult, setTestResult] = useState<ConnectionResult | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
-  const [presetResults, setPresetResults] = useState<ConnectionResult[]>([]);
-  const [environmentInfo, setEnvironmentInfo] = useState<any>(null);
-  const [sqlQuery, setSqlQuery] = useState('SELECT * FROM users');
-  const [queryResult, setQueryResult] = useState<QueryResult | null>(null);
-  const [isQueryLoading, setIsQueryLoading] = useState(false);
+  // CONNECTION TEST STATE MANAGEMENT
+  const [testResult, setTestResult] = useState<ConnectionResult | null>(null);        // Current connection test result
+  const [isLoading, setIsLoading] = useState(false);                                  // Connection test loading state
+  const [presetResults, setPresetResults] = useState<ConnectionResult[]>([]);         // Results from preset connection tests
+  const [environmentInfo, setEnvironmentInfo] = useState<any>(null);                  // System environment information
+  
+  // SQL QUERY EXECUTION STATE MANAGEMENT
+  const [sqlQuery, setSqlQuery] = useState('SELECT * FROM users');                    // Current SQL query text
+  const [queryResult, setQueryResult] = useState<QueryResult | null>(null);          // SQL query execution result
+  const [isQueryLoading, setIsQueryLoading] = useState(false);                       // Query execution loading state
 
+  /**
+   * HANDLE INPUT CHANGE
+   * Updates connection parameters when user modifies form fields
+   * Supports string, boolean, and number input types for comprehensive configuration
+   * 
+   * @param field - The connection parameter field to update
+   * @param value - The new value for the specified field
+   */
   const handleInputChange = (field: keyof ConnectionParams, value: string | boolean | number) => {
     setConnectionParams(prev => ({
-      ...prev,
-      [field]: value
+      ...prev,              // Preserve existing connection parameters
+      [field]: value        // Update the specified field with new value
     }));
   };
 
+  /**
+   * EXECUTE SQL QUERY
+   * Sends SQL query to backend for execution using current connection parameters
+   * Provides comprehensive error handling and result display capabilities
+   * Validates credentials before attempting query execution
+   */
   const executeQuery = async () => {
+    // CREDENTIAL VALIDATION
+    // Ensure username and password are provided before attempting query execution
     if (!connectionParams.uid || !connectionParams.pwd) {
       alert('Please fill in username and password first');
       return;
     }
 
-    setIsQueryLoading(true);
-    setQueryResult(null);
+    // INITIALIZE QUERY EXECUTION STATE
+    setIsQueryLoading(true);        // Show loading spinner during query execution
+    setQueryResult(null);           // Clear previous query results
 
     try {
+      // SEND QUERY TO BACKEND API
+      // POST request to execute-query endpoint with connection params and SQL query
       const response = await fetch('/api/database/execute-query', {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json',
+          'Content-Type': 'application/json',    // JSON payload for API request
         },
         body: JSON.stringify({
-          ...connectionParams,
-          port: 2499,
-          query: sqlQuery
+          ...connectionParams,      // Include all connection configuration
+          port: 2499,              // Fixed port for SQL Server
+          query: sqlQuery          // SQL query text to execute
         })
       });
 
-      const result = await response.json();
-      setQueryResult(result);
+      // PROCESS QUERY RESPONSE
+      const result = await response.json();      // Parse JSON response from backend
+      setQueryResult(result);                    // Update UI with query results
+      
     } catch (error) {
+      // HANDLE NETWORK OR API ERRORS
+      // Display user-friendly error message when query execution fails
       setQueryResult({
         success: false,
         message: 'Failed to execute query',
         error: error instanceof Error ? error.message : 'Unknown error'
       });
     } finally {
-      setIsQueryLoading(false);
+      // CLEANUP LOADING STATE
+      setIsQueryLoading(false);     // Hide loading spinner regardless of result
     }
   };
 
+  /**
+   * TEST DATABASE CONNECTION
+   * Validates database connectivity using current connection parameters
+   * Provides detailed feedback on connection success/failure with timing metrics
+   * Tests authentication and basic server information retrieval
+   */
   const testConnection = async () => {
-    setIsLoading(true);
-    setTestResult(null);
+    // INITIALIZE CONNECTION TEST STATE
+    setIsLoading(true);             // Show loading spinner during connection test
+    setTestResult(null);            // Clear previous test results
 
     try {
+      // SEND CONNECTION TEST REQUEST
+      // POST request to test-connection endpoint with current parameters
       const response = await fetch('/api/database/test-connection', {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json',
+          'Content-Type': 'application/json',    // JSON payload for API request
         },
         body: JSON.stringify({
-          ...connectionParams,
-          port: 2499
+          ...connectionParams,      // Include all connection configuration
+          port: 2499               // Fixed port for SQL Server connection
         })
       });
 
-      const result = await response.json();
-      setTestResult(result);
+      // PROCESS CONNECTION TEST RESPONSE
+      const result = await response.json();      // Parse JSON response from backend
+      setTestResult(result);                     // Update UI with connection test results
+      
     } catch (error) {
+      // HANDLE CONNECTION TEST ERRORS
+      // Display user-friendly error message when connection test fails
       setTestResult({
         success: false,
         message: 'Failed to test connection',
-        error: error.message
+        error: error instanceof Error ? error.message : 'Network error occurred'
       });
     } finally {
-      setIsLoading(false);
+      // CLEANUP LOADING STATE
+      setIsLoading(false);          // Hide loading spinner regardless of result
     }
   };
 
+  /**
+   * TEST PRESET CONNECTIONS
+   * Executes connection tests for predefined role-based database users
+   * Useful for validating all authentication paths and role configurations
+   */
   const testPresetConnections = async () => {
-    setIsLoading(true);
-    setPresetResults([]);
+    // INITIALIZE PRESET TEST STATE
+    setIsLoading(true);             // Show loading spinner during preset tests
+    setPresetResults([]);           // Clear previous preset test results
 
     try {
+      // FETCH PRESET CONNECTION TEST RESULTS
       const response = await fetch('/api/database/test-presets');
       const data = await response.json();
-      setPresetResults(data.results || []);
+      setPresetResults(data.results || []);      // Update UI with preset test results
     } catch (error) {
+      // LOG PRESET TEST ERRORS
       console.error('Failed to test preset connections:', error);
     } finally {
-      setIsLoading(false);
+      // CLEANUP LOADING STATE
+      setIsLoading(false);          // Hide loading spinner regardless of result
     }
   };
 
+  /**
+   * LOAD ENVIRONMENT INFORMATION
+   * Retrieves system configuration and database environment details
+   * Provides diagnostic information for troubleshooting connection issues
+   */
   const loadEnvironmentInfo = async () => {
     try {
+      // FETCH ENVIRONMENT CONFIGURATION
       const response = await fetch('/api/database/environment');
       const data = await response.json();
-      setEnvironmentInfo(data.environment);
+      setEnvironmentInfo(data.environment);      // Store environment info for display
     } catch (error) {
+      // LOG ENVIRONMENT INFO ERRORS
       console.error('Failed to load environment info:', error);
     }
   };
 
+  /**
+   * LOAD DEFAULT CREDENTIALS
+   * Populates connection form with predefined credential sets
+   * Supports quick testing of different user roles and authentication scenarios
+   * 
+   * @param preset - The credential preset to load (john, admin, operator)
+   */
   const loadDefaultCredentials = (preset: 'john' | 'admin' | 'operator') => {
+    // PREDEFINED CREDENTIAL SETS
+    // Maps preset names to their corresponding database credentials
     const defaults = {
-      john: { uid: 'john_login_user', pwd: 'StrongPassword1!' },
-      admin: { uid: 'admin_user', pwd: 'AdminPass123!' },
-      operator: { uid: 'inventory_operator', pwd: 'InventoryOp123!' }
+      john: { uid: 'john_login_user', pwd: 'StrongPassword1!' },        // Authentication user
+      admin: { uid: 'admin_user', pwd: 'AdminPass123!' },               // Administrative privileges
+      operator: { uid: 'inventory_operator', pwd: 'InventoryOp123!' }   // Operational privileges
     };
 
+    // UPDATE CONNECTION PARAMETERS
+    // Merge selected preset credentials with existing connection settings
     setConnectionParams(prev => ({
-      ...prev,
-      ...defaults[preset]
+      ...prev,                      // Preserve existing connection settings
+      ...defaults[preset]           // Override with selected preset credentials
     }));
   };
 
