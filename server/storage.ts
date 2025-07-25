@@ -531,19 +531,8 @@ export class DatabaseStorage implements IStorage {
   }
 }
 
-// Choose storage implementation based on environment
-// Set SQL_SERVER=true in environment to use SQL Server instead of PostgreSQL
-let storage: IStorage;
-
-if (process.env.SQL_SERVER === 'true') {
-  // Use SQL Server storage
-  const { SqlServerStorage } = require('./sqlserver-storage');
-  storage = new SqlServerStorage();
-  console.log('Using SQL Server storage implementation');
-} else {
-  // Use memory storage as default for now to avoid database connection issues
-  storage = new MemStorage();
-  console.log('Using memory storage implementation');
-}
+// For compatibility with routes.ts, export storage as default MemStorage
+// The actual storage selection will be done in routes.ts
+const storage = new MemStorage();
 
 export { storage };

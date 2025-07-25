@@ -1,8 +1,26 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
-import { storage } from "./storage";
+import { RoleBasedSqlServerStorage } from './role-based-storage';
+import { MemStorage } from './storage';
+
+// Load environment variables
+import dotenv from 'dotenv';
+dotenv.config();
+
+// Dynamic storage instantiation based on environment
+let storage: RoleBasedSqlServerStorage | MemStorage;
+if (process.env.SQL_SERVER === 'true') {
+  console.log('SQL Server mode enabled - initializing role-based SQL Server storage...');
+  storage = new RoleBasedSqlServerStorage();
+} else {
+  console.log('Using memory storage implementation');
+  storage = new MemStorage();
+}
 import { insertAssetSchema, insertTransferSchema, insertRepairSchema, loginSchema, registerSchema, insertUserSchema, updateUserSchema } from "@shared/schema";
 import { ZodError } from "zod";
+import { checkSqlServerConnection } from './connection-test';
+import { testDatabaseConnection, testPresetConnections, validateConnectionParams, getConnectionStatusSummary, type ConnectionTestParams } from './connection-test-utility';
+import { runNetworkDiagnostics } from './network-diagnostics';
 
 // Simple token store for backup authentication
 const tokenStore = new Map<string, number>();
@@ -33,7 +51,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { email, password } = loginSchema.parse(req.body);
       
-      const user = await storage.getUserByEmail(email);
+      let user;
+      try {
+        user = await storage.getUserByEmail(email);
+      } catch (error) {
+        console.error('❌ Database connection failed during login:', error.message);
+        return res.status(500).json({ 
+          message: "Database connection failed", 
+          error: error.message,
+          details: "Unable to connect to SQL Server database"
+        });
+      }
+      
       if (!user || user.password !== password) {
         return res.status(401).json({ message: "Invalid credentials" });
       }
@@ -127,7 +156,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const assets = await storage.getAssets();
       res.json(assets);
     } catch (error) {
-      res.status(500).json({ message: "Failed to fetch assets" });
+      console.error("❌ Database error fetching assets:", error.message);
+      res.status(500).json({ 
+        message: "Database connection failed", 
+        error: error.message,
+        details: "Unable to fetch assets from SQL Server"
+      });
     }
   });
 
@@ -461,6 +495,251 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "Invalid input", errors: error.errors });
       }
       res.status(500).json({ message: "Failed to update repair" });
+    }
+  });
+
+  // SQL Server connection test endpoint
+  app.get("/api/database/status", async (req, res) => {
+    try {
+      const connectionStatus = await checkSqlServerConnection();
+      const summary = await getConnectionStatusSummary();
+      res.json({
+        ...connectionStatus,
+        summary
+      });
+    } catch (error) {
+      res.status(500).json({
+        isConnected: false,
+        status: 'ERROR',
+        error: error.message,
+        details: { message: 'Connection test failed' }
+      });
+    }
+  });
+
+  // Connection testing utility - accessible without authentication
+  app.post("/api/database/test-connection", async (req, res) => {
+    try {
+      const connectionParams: ConnectionTestParams = req.body;
+      
+      // Validate parameters
+      const validation = validateConnectionParams(connectionParams);
+      if (!validation.valid) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid connection parameters",
+          errors: validation.errors
+        });
+      }
+
+      // Test the connection
+      const result = await testDatabaseConnection(connectionParams);
+      
+      // Return result (success or failure)
+      res.status(result.success ? 200 : 400).json(result);
+      
+    } catch (error: any) {
+      console.error("Connection test error:", error);
+      res.status(500).json({
+        success: false,
+        message: "Connection test failed",
+        error: error.message
+      });
+    }
+  });
+
+  // Test preset connections - useful for diagnostics
+  app.get("/api/database/test-presets", async (req, res) => {
+    try {
+      const results = await testPresetConnections();
+      res.json({
+        success: true,
+        message: "Preset connection tests completed",
+        results,
+        timestamp: new Date().toISOString()
+      });
+    } catch (error: any) {
+      console.error("Preset connection tests error:", error);
+      res.status(500).json({
+        success: false,
+        message: "Preset connection tests failed",
+        error: error.message
+      });
+    }
+  });
+
+  /**
+   * EXECUTE SQL QUERY ENDPOINT
+   * API endpoint for testing SQL queries with role-based database access
+   * Uses established connection credentials that have been pre-verified
+   * Provides comprehensive error handling and detailed result formatting
+   * 
+   * REQUEST BODY:
+   * - server: SQL Server IP address
+   * - database: Target database name
+   * - uid: Database username (must be from successful connection test)
+   * - pwd: Database password (must be from successful connection test)
+   * - port: SQL Server port number
+   * - query: SQL query string to execute
+   * - useEstablishedConnection: Boolean flag indicating use of verified credentials
+   * 
+   * RESPONSE FORMAT:
+   * - success: Boolean indicating query success/failure
+   * - message: Human-readable result message
+   * - executionTime: Query execution time in milliseconds
+   * - rowCount: Number of rows returned by SELECT queries
+   * - columns: Array of column names in result set
+   * - data: Query result data rows
+   * - affectedRows: Number of rows affected by DML operations
+   * - error: Error message if query failed
+   * - sqlState: SQL error state code for debugging
+   */
+  app.post("/api/database/execute-query", async (req, res) => {
+    try {
+      // EXTRACT REQUEST PARAMETERS
+      const { server, database, uid, pwd, port, query, useEstablishedConnection } = req.body;
+      
+      // VALIDATE SQL QUERY PARAMETER
+      if (!query || typeof query !== 'string') {
+        return res.status(400).json({
+          success: false,
+          message: 'SQL query is required',
+          error: 'Missing or invalid query parameter'
+        });
+      }
+
+      // VALIDATE ESTABLISHED CONNECTION REQUIREMENT
+      // Only allow queries from connections that have been pre-verified
+      if (useEstablishedConnection !== true) {
+        return res.status(400).json({
+          success: false,
+          message: 'Queries must use an established connection. Please test connection first.',
+          error: 'Connection not pre-verified'
+        });
+      }
+
+      // LOG QUERY EXECUTION ATTEMPT WITH ESTABLISHED CONNECTION
+      console.log(`🔍 Executing SQL query using established connection as ${uid}: ${query.substring(0, 100)}${query.length > 100 ? '...' : ''}`);
+      
+      // BUILD SQL SERVER CONNECTION CONFIGURATION
+      // Using same configuration as established connection for consistency
+      const config = {
+        server: server || '163.227.186.23',      // Default to inventory server IP
+        database: database || 'USE InventoryDB',  // Default to inventory database
+        port: port || 2499,                       // Default to custom SQL Server port
+        user: uid,                                // Database username from established connection
+        password: pwd,                            // Database password from established connection
+        options: {
+          encrypt: false,                         // Disable encryption for internal network
+          trustServerCertificate: true,           // Trust self-signed certificates
+          enableArithAbort: true,                 // Enable arithmetic abort for error handling
+          connectTimeout: 15000,                  // Connection timeout (15 seconds)
+          requestTimeout: 30000                   // Query timeout (30 seconds)
+        }
+      };
+
+      // START QUERY EXECUTION TIMING
+      const startTime = Date.now();
+      
+      try {
+        // ESTABLISH DATABASE CONNECTION
+        // Import mssql module using ES6 dynamic import for Node.js compatibility
+        const sql = await import('mssql');
+        const pool = new sql.default.ConnectionPool(config);  // Create connection pool with config
+        await pool.connect();                                 // Establish connection to SQL Server
+        
+        // EXECUTE SQL QUERY
+        // Use connection pool to execute the provided SQL query with proper error handling
+        const result = await pool.request().query(query);
+        
+        // CLOSE DATABASE CONNECTION
+        await pool.close();        // Clean up connection resources
+        
+        // CALCULATE QUERY EXECUTION TIME
+        const executionTime = Date.now() - startTime;
+        console.log(`✅ Query executed successfully in ${executionTime}ms, returned ${result.recordset?.length || 0} rows`);
+        
+        // RETURN SUCCESSFUL QUERY RESULTS
+        res.json({
+          success: true,
+          message: `Query executed successfully in ${executionTime}ms`,
+          executionTime,                                                                        // Time taken to execute query
+          rowCount: result.recordset?.length || 0,                                            // Number of rows returned
+          columns: result.recordset && result.recordset.length > 0 ? Object.keys(result.recordset[0]) : [], // Column names
+          data: result.recordset || [],                                                       // Query result data
+          affectedRows: result.rowsAffected?.[0] || 0                                        // Rows affected by DML operations
+        });
+        
+      } catch (dbError: any) {
+        // HANDLE SQL EXECUTION ERRORS
+        console.error(`❌ Query execution failed:`, dbError.message);
+        res.json({
+          success: false,
+          message: `Query execution failed: ${dbError.message}`,
+          error: dbError.message,                    // Error message for display
+          sqlState: dbError.code,                    // SQL error state code
+          details: dbError.originalError?.info       // Additional error details from SQL Server
+        });
+      }
+      
+    } catch (error: any) {
+      // HANDLE GENERAL EXECUTION ERRORS
+      console.error('❌ Query execution error:', error.message);
+      res.status(500).json({
+        success: false,
+        message: 'Internal server error during query execution',
+        error: error.message
+      });
+    }
+  });
+
+  // Get connection environment info - useful for setup verification
+  app.get("/api/database/environment", async (req, res) => {
+    try {
+      const summary = await getConnectionStatusSummary();
+      res.json({
+        success: true,
+        environment: summary.environment,
+        message: "Environment configuration retrieved",
+        timestamp: new Date().toISOString()
+      });
+    } catch (error: any) {
+      res.status(500).json({
+        success: false,
+        message: "Failed to get environment info",
+        error: error.message
+      });
+    }
+  });
+
+  // Network diagnostics for troubleshooting connection issues
+  app.post("/api/database/network-diagnostics", async (req, res) => {
+    try {
+      const { serverName } = req.body;
+      
+      if (!serverName) {
+        return res.status(400).json({
+          success: false,
+          message: "Server name is required"
+        });
+      }
+
+      const diagnostics = await runNetworkDiagnostics(serverName);
+      
+      res.json({
+        success: true,
+        message: "Network diagnostics completed",
+        diagnostics,
+        timestamp: new Date().toISOString()
+      });
+      
+    } catch (error: any) {
+      console.error("Network diagnostics error:", error);
+      res.status(500).json({
+        success: false,
+        message: "Network diagnostics failed",
+        error: error.message
+      });
     }
   });
 

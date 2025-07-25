@@ -1,9 +1,10 @@
 import sql from 'mssql';
 
-// SQL Server connection configuration based on the Python code
+// SQL Server connection configuration - Update with your server details
+// For production deployment, set these values in environment variables
 const sqlServerConfig: sql.config = {
-  server: 'WSERVER718623-I\\SQLEXPRESS',
-  database: 'InventoryDB',
+  server: process.env.SQL_SERVER_HOST || 'WSERVER718623-I\\SQLEXPRESS',
+  database: process.env.SQL_DATABASE || 'InventoryDB',
   authentication: {
     type: 'ntlm',
     options: {
@@ -27,8 +28,8 @@ const sqlServerConfig: sql.config = {
 
 // Alternative connection using Windows Authentication
 const sqlServerConfigWindows: sql.config = {
-  server: 'WSERVER718623-I\\SQLEXPRESS',
-  database: 'InventoryDB',
+  server: process.env.SQL_SERVER_HOST || 'WSERVER718623-I\\SQLEXPRESS',
+  database: process.env.SQL_DATABASE || 'InventoryDB',
   driver: 'msnodesqlv8', // For Windows Authentication
   options: {
     trustedConnection: true,

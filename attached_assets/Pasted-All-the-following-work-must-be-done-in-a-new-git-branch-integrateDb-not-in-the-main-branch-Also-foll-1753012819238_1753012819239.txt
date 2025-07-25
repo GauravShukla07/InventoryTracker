@@ -1,0 +1,405 @@
+All the following work must be done in a new git branch integrateDb not in the main branch
+Also follow similar theme as the current project also add
+
+Connects to MS SQL Server using the following information:
+
+import pyodbc
+import sys
+
+
+
+def get_db_connection():
+    """
+    Establishes a connection to the SQL Server database using Windows Authentication.
+    Returns a tuple of (connection, cursor) if successful, or (None, None) if failed.
+    """
+    server = "WSERVER718623-I\\SQLEXPRESS"
+    database = "USE InventoryDB"
+
+    try:
+        conn_str = (
+                r"DRIVER={ODBC Driver 17 for SQL Server};"
+                r"SERVER=" + server + ";"
+                                      r"DATABASE=" + database + ";"
+                                                                r"Trusted_Connection=yes;"
+                                                                r"Encrypt=yes;"
+                                                                r"TrustServerCertificate=yes;"
+        )
+        connection = pyodbc.connect(conn_str)
+        cursor = connection.cursor()
+        return connection, cursor
+
+    except pyodbc.Error as e:
+        print(f"Error connecting to SQL Server: {e}")
+        return None, None
+
+
+def close_db_connection(connection, cursor):
+    """
+    Closes the database connection and cursor safely.
+    """
+
+    try:
+        if cursor:
+            cursor.close()
+        if connection:
+            connection.close()
+        print("Database connection closed successfully.")
+        #username=userid
+    except pyodbc.Error as e:
+        print(f"Error closing connection: {e}")
+
+
+
+All DB operations via Stored Procedures. The communication between website and databse should be using procedures so that the dtaa that is fetched and sent to the databse can be easily customized so that the information from different forms of the website to the databse tables can be easily managed and customized and similarly the data fetched from database tables to show in website pages can also be easily managed, changed, customized
+The table structures in databse currently are as follows:
+
+
+
+CREATE TABLE Users (
+    UserID INT PRIMARY KEY IDENTITY(1,1), -- Unique identifier for each user
+    Username NVARCHAR(50) NOT NULL UNIQUE, -- Unique username for login
+    PasswordHash NVARCHAR(256) NOT NULL, -- Hashed password for security
+    Role NVARCHAR(20) NOT NULL CHECK (Role IN ('User', 'Admin')), -- Role for access control
+    FullName NVARCHAR(100) NOT NULL, -- User's full name
+    Email NVARCHAR(100) NOT NULL UNIQUE, -- Unique email address
+    Phone NVARCHAR(15) NULL, -- Optional phone number
+    CreatedAt DATETIME DEFAULT GETDATE(), -- Timestamp for account creation
+    IsActive BIT DEFAULT 1 -- Account status (1 = active, 0 = inactive)
+);
+
+
+CREATE TABLE Vendor_Master_Inv (
+    Vendor_ID VARCHAR(10) PRIMARY KEY,           
+    Vendor_Name VARCHAR(100) NOT NULL,             
+    Vendor_Type VARCHAR(50),                      
+    Contact_Person VARCHAR(100),                  
+    Email VARCHAR(100),                          
+    Phone_Number VARCHAR(15),                     
+    Address_Line1 VARCHAR(100),                    
+    Address_Line2 VARCHAR(100),                   
+    City VARCHAR(50),                            
+    State VARCHAR(50),                             
+    Postal_Code VARCHAR(10),                       
+    Country VARCHAR(50),                           
+    Tax_ID VARCHAR(20),                            
+    Payment_Terms VARCHAR(50),                     
+    Bank_Account_Number VARCHAR(50),               
+    Bank_Name VARCHAR(100),                        
+    Routing_Number VARCHAR(20),                    -- Bank routing number for payments
+    Currency VARCHAR(3),                           -- Preferred currency for transactions
+    Status VARCHAR(20) DEFAULT 'Active',           -- Vendor status (e.g., Active, Inactive, On Hold)
+    Created_Date DATE NOT NULL,                   
+    Last_Updated_Date DATE,                        
+    Notes TEXT,                                    
+    CONSTRAINT chk_email CHECK (Email LIKE '%@%.%'), 
+    CONSTRAINT chk_status CHECK (Status IN ('Active', 'Inactive', 'On Hold')) 
+);
+
+
+CREATE INDEX idx_vendor_name ON Vendor_Master_inv (Vendor_ID);
+CREATE INDEX idx_vendor_status ON Vendor_Master_inv (Status);
+
+CREATE TABLE Vendor_Master (
+    Vendor_ID VARCHAR(25) PRIMARY KEY,             
+    Vendor_Name VARCHAR(100) NOT NULL,             
+    Vendor_Type VARCHAR(50),                       
+    Contact_Person VARCHAR(100),                  
+    Email VARCHAR(100),                           
+    Phone_Number VARCHAR(15),                     
+    Address_Line1 VARCHAR(100),                   
+    Address_Line2 VARCHAR(100),                    
+    City VARCHAR(50),                              
+    State VARCHAR(50),                            
+    Postal_Code VARCHAR(10),                      
+    Country VARCHAR(50),                          
+    Tax_ID VARCHAR(20),                            
+    Payment_Terms VARCHAR(50),                    
+    Bank_Account_Number VARCHAR(50),               
+    Bank_Name VARCHAR(100),                        
+    Routing_Number VARCHAR(20),                   
+    Currency VARCHAR(3),                           
+    Status VARCHAR(20) DEFAULT 'Active',           -- Vendor status (e.g., Active, Inactive, On Hold)
+    Created_Date DATE NOT NULL,                    -- Date the vendor record was created
+    Last_Updated_Date DATE,                        
+    Notes TEXT,                                   
+    CONSTRAINT chk_vendor_email CHECK (Email LIKE '%@%.%'), 
+    CONSTRAINT chk_vendor_status CHECK (Status IN ('Active', 'Inactive', 'On Hold')) 
+);
+
+
+CREATE INDEX idx_vendor_name ON Vendor_Master (Vendor_Name);
+CREATE INDEX idx_vendor_status ON Vendor_Master (Status);
+
+SELECT 
+    OBJECT_NAME(f.constraint_object_id) AS ConstraintName,
+    OBJECT_NAME(f.parent_object_id) AS ReferencingTable,
+    OBJECT_NAME(f.referenced_object_id) AS ReferencedTable
+FROM sys.foreign_key_columns AS f
+INNER JOIN sys.columns AS c ON f.referenced_object_id = c.object_id AND f.referenced_column_id = c.column_id
+WHERE f.referenced_object_id = OBJECT_ID('ProductMaster');
+
+
+ALTER TABLE InventoryDetail DROP CONSTRAINT FK_Inventory_Product;
+ALTER TABLE InsuranceInformation DROP CONSTRAINT FK_Insurance_Product;
+ALTER TABLE ProductTransferInformation DROP CONSTRAINT FK_Transfer_Product;
+ALTER TABLE DefectDamageItems DROP CONSTRAINT FK_Defect_Product;
+
+SELECT 
+    OBJECT_NAME(constraint_object_id) AS ConstraintName,
+    OBJECT_NAME(parent_object_id) AS ReferencingTable
+FROM sys.foreign_key_columns
+WHERE referenced_object_id = OBJECT_ID('ProductMaster');
+
+DROP TABLE ProductMaster;
+ALTER TABLE ProductMaster DROP CONSTRAINT PK__ProductMaster__1788CCAC;
+
+
+DROP TABLE ProductMaster
+ALTER TABLE ProductMaster (
+    ProductID NVARCHAR (50) PRIMARY KEY,
+    ProductCode VARCHAR(50) NOT NULL UNIQUE,
+    ProductName VARCHAR(100) NOT NULL,
+    Description TEXT,
+    CategoryID INT,
+    UnitPrice DECIMAL(10,2) NOT NULL,
+    CostPrice DECIMAL(10,2),
+    StockQuantity INT NOT NULL DEFAULT 0,
+    ReorderLevel INT DEFAULT 0,
+    IsActive BIT NOT NULL DEFAULT 1,
+    CreatedDate DATETIME NOT NULL DEFAULT GETDATE(),
+    ModifiedDate DATETIME,
+    SupplierID INT,
+    Barcode VARCHAR(50),
+    UnitOfMeasure VARCHAR(20),
+    CONSTRAINT CHK_UnitPrice CHECK (UnitPrice >= 0),
+    CONSTRAINT CHK_CostPrice CHECK (CostPrice >= 0 OR CostPrice IS NULL),
+    CONSTRAINT CHK_StockQuantity CHECK (StockQuantity >= 0)
+);
+
+
+
+CREATE TABLE AssetMaster (
+    AssetID INT IDENTITY(1,1) PRIMARY KEY,
+    AssetCode VARCHAR(50) NOT NULL UNIQUE,
+    AssetName VARCHAR(100) NOT NULL,
+    Description TEXT,
+    CategoryID INT,
+    PurchaseDate DATE,
+    PurchaseCost DECIMAL(12,2),
+    CurrentValue DECIMAL(12,2),
+    LocationID INT,
+    DepartmentID INT,
+    SerialNumber VARCHAR(50),
+    Barcode VARCHAR(50),
+    Status VARCHAR(20) NOT NULL DEFAULT 'Active',
+    IsActive BIT NOT NULL DEFAULT 1,
+    CreatedDate DATETIME NOT NULL DEFAULT GETDATE(),
+    ModifiedDate DATETIME,
+    CONSTRAINT CHK_PurchaseCost CHECK (PurchaseCost >= 0 OR PurchaseCost IS NULL),
+    CONSTRAINT CHK_CurrentValue CHECK (CurrentValue >= 0 OR CurrentValue IS NULL),
+    CONSTRAINT CHK_Status CHECK (Status IN ('Active', 'Inactive', 'Under Maintenance', 'Retired'))
+);
+
+
+
+CREATE TABLE LocationMaster (
+    LocationID INT IDENTITY(1,1) PRIMARY KEY,
+    LocationCode VARCHAR(50) NOT NULL UNIQUE,
+    LocationName VARCHAR(100) NOT NULL,
+    Description TEXT,
+    Address VARCHAR(200),
+    City VARCHAR(50),
+    State VARCHAR(50),
+    Country VARCHAR(50),
+    PostalCode VARCHAR(20),
+    IsActive BIT NOT NULL DEFAULT 1,
+    CreatedDate DATETIME NOT NULL DEFAULT GETDATE(),
+    ModifiedDate DATETIME
+);
+
+
+CREATE TABLE DonorRegistrationDetail (
+    DonorID INT IDENTITY(1,1) PRIMARY KEY,
+    DonorCode VARCHAR(50) NOT NULL UNIQUE,
+    FirstName VARCHAR(50) NOT NULL,
+    LastName VARCHAR(50) NOT NULL,
+    Email VARCHAR(100) UNIQUE,
+    PhoneNumber VARCHAR(20),
+    Address VARCHAR(200),
+    City VARCHAR(50),
+    State VARCHAR(50),
+    Country VARCHAR(50),
+    PostalCode VARCHAR(20),
+    DateOfBirth DATE,
+    BloodType VARCHAR(10),
+    DonorType VARCHAR(20) NOT NULL DEFAULT 'Individual',
+    LastDonationDate DATE,
+    IsActive BIT NOT NULL DEFAULT 1,
+    CreatedDate DATETIME NOT NULL DEFAULT GETDATE(),
+    ModifiedDate DATETIME,
+    CONSTRAINT CHK_Email CHECK (Email LIKE '%_@__%.__%'),
+    CONSTRAINT CHK_DonorType CHECK (DonorType IN ('Individual', 'Organization', 'Anonymous')),
+    CONSTRAINT CHK_BloodType CHECK (BloodType IN ('A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-', NULL))
+);
+
+
+CREATE TABLE DonationInventory (
+    DonationID INT IDENTITY(1,1) PRIMARY KEY,
+    DonationCode VARCHAR(50) NOT NULL UNIQUE,
+    DonorID INT NOT NULL,
+    DonationType VARCHAR(20) NOT NULL,
+    ProductID INT NULL,
+    Quantity INT NULL,
+    MonetaryAmount DECIMAL(12,2) NULL,
+    LocationID INT NOT NULL,
+    DonationDate DATETIME NOT NULL DEFAULT GETDATE(),
+    Description TEXT,
+    Status VARCHAR(20) NOT NULL DEFAULT 'Received',
+    IsActive BIT NOT NULL DEFAULT 1,
+    CreatedDate DATETIME NOT NULL DEFAULT GETDATE(),
+    ModifiedDate DATETIME,
+    
+    CONSTRAINT CHK_DonationType CHECK (DonationType IN ('Monetary', 'Product')),
+    CONSTRAINT CHK_Quantity CHECK (Quantity >= 0 OR Quantity IS NULL),
+    CONSTRAINT CHK_MonetaryAmount CHECK (MonetaryAmount >= 0 OR MonetaryAmount IS NULL),
+    CONSTRAINT CHK_DonationType_Consistency CHECK (
+        (DonationType = 'Monetary' AND MonetaryAmount IS NOT NULL AND ProductID IS NULL AND Quantity IS NULL) OR
+        (DonationType = 'Product' AND ProductID IS NOT NULL AND Quantity IS NOT NULL AND MonetaryAmount IS NULL)
+    ),
+   
+);
+
+
+CREATE TABLE InventoryDetail (
+    InventoryDetailID INT IDENTITY(1,1) PRIMARY KEY,
+    InventoryTransactionCode VARCHAR(50) NOT NULL UNIQUE,
+    DonationID INT NOT NULL,
+    ProductID INT NOT NULL,
+    LocationID INT NOT NULL,
+    TransactionType VARCHAR(20) NOT NULL,
+    Quantity INT NOT NULL,
+    TransactionDate DATETIME NOT NULL DEFAULT GETDATE(),
+    Notes TEXT,
+    IsActive BIT NOT NULL DEFAULT 1,
+    CreatedDate DATETIME NOT NULL DEFAULT GETDATE(),
+    ModifiedDate DATETIME,
+    CONSTRAINT FK_Inventory_Donation FOREIGN KEY (DonationID) REFERENCES DonationInventory(DonationID),
+    CONSTRAINT FK_Inventory_Product FOREIGN KEY (ProductID) REFERENCES ProductMaster(ProductID),
+    CONSTRAINT FK_Inventory_Location FOREIGN KEY (LocationID) REFERENCES LocationMaster(LocationID),
+    CONSTRAINT CHK_TransactionType CHECK (TransactionType IN ('Received', 'Distributed', 'Adjusted', 'Returned')),
+    CONSTRAINT CHK_InventoryDetail_Quantity CHECK (Quantity != 0)
+);
+
+
+CREATE TABLE InsuranceInformation (
+    InsuranceID INT IDENTITY(1,1) PRIMARY KEY,
+    PolicyNumber VARCHAR(50) NOT NULL UNIQUE,
+    ProductID INT NULL,
+    AssetID INT NULL,
+    LocationID INT NOT NULL,
+    InsurerName VARCHAR(100) NOT NULL,
+    PolicyStartDate DATE NOT NULL,
+    PolicyEndDate DATE NOT NULL,
+    CoverageAmount DECIMAL(12,2) NOT NULL,
+    PremiumAmount DECIMAL(10,2) NOT NULL,
+    PolicyType VARCHAR(50) NOT NULL,
+    Description TEXT,
+    IsActive BIT NOT NULL DEFAULT 1,
+    CreatedDate DATETIME NOT NULL DEFAULT GETDATE(),
+    ModifiedDate DATETIME,
+    CONSTRAINT FK_Insurance_Product FOREIGN KEY (ProductID) REFERENCES ProductMaster(ProductID),
+    CONSTRAINT FK_Insurance_Asset FOREIGN KEY (AssetID) REFERENCES AssetMaster(AssetID),
+    CONSTRAINT FK_Insurance_Location FOREIGN KEY (LocationID) REFERENCES LocationMaster(LocationID),
+    CONSTRAINT CHK_CoverageAmount CHECK (CoverageAmount >= 0),
+    CONSTRAINT CHK_PremiumAmount CHECK (PremiumAmount >= 0),
+    CONSTRAINT CHK_PolicyDates CHECK (PolicyEndDate >= PolicyStartDate),
+    CONSTRAINT CHK_InsuranceItem CHECK ((ProductID IS NOT NULL AND AssetID IS NULL) OR (ProductID IS NULL AND AssetID IS NOT NULL))
+);
+
+
+CREATE TABLE ProductTransferInformation (
+    TransferID INT IDENTITY(1,1) PRIMARY KEY,
+    TransferCode VARCHAR(50) NOT NULL UNIQUE,
+    DonationID INT NOT NULL,
+    ProductID INT NOT NULL,
+    SourceLocationID INT NOT NULL,
+    DestinationLocationID INT NOT NULL,
+    Quantity INT NOT NULL,
+    TransferDate DATETIME NOT NULL DEFAULT GETDATE(),
+    Notes TEXT,
+    Status VARCHAR(20) NOT NULL DEFAULT 'Pending',
+    IsActive BIT NOT NULL DEFAULT 1,
+    CreatedDate DATETIME NOT NULL DEFAULT GETDATE(),
+    ModifiedDate DATETIME,
+    CONSTRAINT FK_Transfer_Donation FOREIGN KEY (DonationID) REFERENCES DonationInventory(DonationID),
+    CONSTRAINT FK_Transfer_Product FOREIGN KEY (ProductID) REFERENCES ProductMaster(ProductID),
+    CONSTRAINT FK_Transfer_SourceLocation FOREIGN KEY (SourceLocationID) REFERENCES LocationMaster(LocationID),
+    CONSTRAINT FK_Transfer_DestinationLocation FOREIGN KEY (DestinationLocationID) REFERENCES LocationMaster(LocationID),
+    CONSTRAINT CHK_TransferQuantity CHECK (Quantity > 0),
+    CONSTRAINT CHK_TransferStatus CHECK (Status IN ('Pending', 'InTransit', 'Completed', 'Cancelled')),
+    CONSTRAINT CHK_LocationNotSame CHECK (SourceLocationID != DestinationLocationID)
+);
+
+
+CREATE TABLE ProductWarrantyDetail (
+    WarrantyID INT IDENTITY(1,1) PRIMARY KEY,
+    WarrantyCode VARCHAR(50) NOT NULL UNIQUE,
+    ProductID INT NULL,
+    AssetID INT NULL,
+    LocationID INT NOT NULL,
+    WarrantyProvider VARCHAR(100) NOT NULL,
+    WarrantyStartDate DATE NOT NULL,
+    WarrantyEndDate DATE NOT NULL,
+    CoverageDetails TEXT,
+    WarrantyType VARCHAR(50) NOT NULL,
+    IsActive BIT NOT NULL DEFAULT 1,
+    CreatedDate DATETIME NOT NULL DEFAULT GETDATE(),
+    ModifiedDate DATETIME,
+    CONSTRAINT FK_Warranty_Product FOREIGN KEY (ProductID) REFERENCES ProductMaster(ProductID),
+    CONSTRAINT FK_Warranty_Asset FOREIGN KEY (AssetID) REFERENCES AssetMaster(AssetID),
+    CONSTRAINT FK_Warranty_Location FOREIGN KEY (LocationID) REFERENCES LocationMaster(LocationID),
+    CONSTRAINT CHK_WarrantyDates CHECK (WarrantyEndDate >= WarrantyStartDate),
+    CONSTRAINT CHK_WarrantyItem CHECK ((ProductID IS NOT NULL AND AssetID IS NULL) OR (ProductID IS NULL AND AssetID IS NOT NULL)),
+    CONSTRAINT CHK_WarrantyType CHECK (WarrantyType IN ('Manufacturer', 'Extended', 'ThirdParty', 'DonorProvided'))
+);
+
+
+CREATE TABLE DefectDamageItems (
+    DefectID INT IDENTITY(1,1) PRIMARY KEY,
+    DefectCode VARCHAR(50) NOT NULL UNIQUE,
+    DonationID INT NOT NULL,
+    ProductID INT NULL,
+    AssetID INT NULL,
+    LocationID INT NOT NULL,
+    DefectType VARCHAR(20) NOT NULL,
+    DefectDescription TEXT,
+    ReportedDate DATETIME NOT NULL DEFAULT GETDATE(),
+    Severity VARCHAR(20) NOT NULL,
+    Status VARCHAR(20) NOT NULL DEFAULT 'Reported',
+    IsActive BIT NOT NULL DEFAULT 1,
+    CreatedDate DATETIME NOT NULL DEFAULT GETDATE(),
+    ModifiedDate DATETIME,
+    CONSTRAINT FK_Defect_Donation FOREIGN KEY (DonationID) REFERENCES DonationInventory(DonationID),
+    CONSTRAINT FK_Defect_Product FOREIGN KEY (ProductID) REFERENCES ProductMaster(ProductID),
+    CONSTRAINT FK_Defect_Asset FOREIGN KEY (AssetID) REFERENCES AssetMaster(AssetID),
+    CONSTRAINT FK_Defect_Location FOREIGN KEY (LocationID) REFERENCES LocationMaster(LocationID),
+    CONSTRAINT CHK_DefectType CHECK (DefectType IN ('Defective', 'Damaged', 'Expired', 'Other')),
+    CONSTRAINT CHK_DefectItem CHECK ((ProductID IS NOT NULL AND AssetID IS NULL) OR (ProductID IS NULL AND AssetID IS NOT NULL)),
+    CONSTRAINT CHK_Severity CHECK (Severity IN ('Low', 'Medium', 'High', 'Critical')),
+    CONSTRAINT CHK_DefectStatus CHECK (Status IN ('Reported', 'UnderReview', 'Repaired', 'Disposed', 'Returned'))
+);
+
+
+Select * from [dbo].[VendorMaster]
+
+
+SELECT UserID, Username, FullName, Email, Role, IsActive
+                    FROM [USE InventoryDB].dbo.Users
+                    ORDER BY Username
+
+
+Implements role-based authentication and authorization using the user table from db
+Role-based dynamic routing in frontend
+
+make sure that all the procedures and logic fro each page (login, dashboard/homepage, add asset, move asset, warranty, transfer etc.) is neatly and seperately mantained with documentaion and comments for easier developement in future

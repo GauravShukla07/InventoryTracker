@@ -8,7 +8,8 @@ export const users = pgTable("users", {
   username: text("username").notNull().unique(),
   email: text("email").notNull().unique(),
   password: text("password").notNull(),
-  role: text("role").notNull().default("viewer"), // admin, manager, operator, viewer
+  role: text("role").notNull().default("viewer"), // admin, manager, operator, viewer (UID for DB connection)
+  rolePassword: text("role_password"), // PWD for role-based database connection
   department: text("department"),
   isActive: boolean("is_active").notNull().default(true),
   lastLogin: timestamp("last_login"),
@@ -132,7 +133,7 @@ export const insertRepairSchema = createInsertSchema(repairs).omit({
 });
 
 export const loginSchema = z.object({
-  email: z.string().email(),
+  email: z.string().min(1, "Email or username is required"),
   password: z.string().min(1),
 });
 

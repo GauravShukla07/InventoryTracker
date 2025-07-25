@@ -4,6 +4,15 @@ import MemoryStore from "memorystore";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 
+// Load environment variables
+import dotenv from 'dotenv';
+dotenv.config();
+
+// Log environment variables for debugging
+console.log('🔍 Environment check:');
+console.log('SQL_SERVER:', process.env.SQL_SERVER);
+console.log('NODE_ENV:', process.env.NODE_ENV);
+
 // Extend session data interface
 declare module 'express-session' {
   interface SessionData {
@@ -62,16 +71,15 @@ app.use(session({
     checkPeriod: 86400000 // prune expired entries every 24h
   }),
   secret: process.env.SESSION_SECRET || 'inventory-management-secret-key-for-development',
-  resave: true, // Force session save even if unmodified
-  saveUninitialized: true, // Save uninitialized sessions
-  rolling: true, // Reset expiration on every request
+  resave: false,    // Don't save session if unmodified (recommended)
+  saveUninitialized: false, // Don't create session until something stored (recommended)
+  rolling: true,    // Reset expiration on every request
   cookie: {
-    secure: false,
-    httpOnly: false, // Allow client-side access for debugging
-    maxAge: 24 * 60 * 60 * 1000,
-    sameSite: 'none', // Use 'none' for cross-origin requests in Replit
-    domain: undefined,
-    path: '/'
+    secure: false,    // False for HTTP development
+    httpOnly: false,  // Allow JavaScript access for debugging
+    maxAge: 24 * 60 * 60 * 1000, // 24 hours
+    sameSite: 'lax',  // Lax for cross-origin compatibility
+    path: '/'         // Available on all paths
   },
   name: 'sessionid'
 }));
