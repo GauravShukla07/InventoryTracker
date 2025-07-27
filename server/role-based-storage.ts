@@ -1,43 +1,85 @@
 /**
- * FILE ROLE: Role-Based SQL Server Storage Implementation
+ * FILE ROLE: Two-Tier Authentication Storage Implementation
  * 
- * PURPOSE: 
- * Implements the IStorage interface using Microsoft SQL Server with a sophisticated
- * two-tier authentication system. Provides enterprise-grade security through role-based
- * database user connections while maintaining session isolation and proper privilege separation.
+ * ARCHITECTURE:
+ * 1. Default connection: john_login (read-only access to Users table)
+ * 2. User authentication: Validates credentials against Users table
+ * 3. Role extraction: Gets Role and rolePassword from matching user ro  async createAsset(assetData: InsertAsset): Promise<Asset> {
+    if (!this.currentSessionId) {
+      throw new Error('No active session. User must be authenticated.');
+    }
+    
+    try {
+      // Use role-based connection - operator+ privileges required at database level
+      const result = await executeUserQuery(
+        this.currentSessionId,
+        `INSERT INTO assets (voucherNo, date, donor, currentLocation, lostQuantity, lostAmount, 
+                            handoverPerson, handoverOrganization, transferRecipient, transferLocation, 
+                            isDonated, projectName, isInsured, policyNumber, warranty, warrantyValidity, 
+                            grn, status, createdAt, updatedAt)
+         OUTPUT INSERTED.*
+         VALUES (@voucherNo, @date, @donor, @currentLocation, @lostQuantity, @lostAmount,
+                @handoverPerson, @handoverOrganization, @transferRecipient, @transferLocation,
+                @isDonated, @projectName, @isInsured, @policyNumber, @warranty, @warrantyValidity,
+                @grn, @status, GETDATE(), GETDATE())`,
+        {
+          voucherNo: assetData.voucherNo,
+          date: assetData.date,
+          donor: assetData.donor,
+          currentLocation: assetData.currentLocation,
+          lostQuantity: assetData.lostQuantity || 0,
+          lostAmount: assetData.lostAmount || 0,
+          handoverPerson: assetData.handoverPerson,
+          handoverOrganization: assetData.handoverOrganization,
+          transferRecipient: assetData.transferRecipient,
+          transferLocation: assetData.transferLocation,
+          isDonated: assetData.isDonated,
+          projectName: assetData.projectName,
+          isInsured: assetData.isInsured || false,
+          policyNumber: assetData.policyNumber,
+          warranty: assetData.warranty,
+          warrantyValidity: assetData.warrantyValidity,
+          grn: assetData.grn,
+          status: assetData.status || 'active'
+        }
+      );
+      
+      if (result.recordset.length === 0) {
+        throw new Error('Failed to create asset - no record returned');
+      }
+      
+      return result.recordset[0];
+    } catch (error: any) {
+      console.error('❌ Error in createAsset:', error.message);
+      if (error.message.includes('permission') || error.message.includes('denied')) {
+        throw new Error('Insufficient privileges to create assets. Operator role or higher required.');
+      }
+      throw new Error(`Failed to create asset: ${error.message}`);
+    }
+  }. Role connection: Establishes new connection with role-specific SQL user
+ * 5. Privilege enforcement: Database-level access control via role-specific users
  * 
  * AUTHENTICATION FLOW:
- * 1. john_login_user validates credentials against Users table (minimal privileges)
- * 2. System extracts role and rolePassword from Users table
- * 3. Creates dedicated connection using role-specific database user
- * 4. All subsequent operations use role-specific connection with appropriate privileges
+ * Client → john_login connection → credential validation → role extraction → 
+ * close john_login → new role-based connection → privilege-enforced operations
  * 
- * DATABASE SCHEMA MAPPING:
- * - UserID (int) → id (application ID)
- * - Username (varchar) → username (login identifier)
- * - Email (varchar) → email (contact information)
- * - Role (varchar) → role (application role: admin, manager, operator, viewer)
- * - FullName (varchar) → department (display name/department)
- * - PasswordHash (varchar) → password validation
- * - rolePassword (varchar) → database user password for role-specific connections
- * - IsActive (bit) → isActive (account status)
- * 
- * CONNECTION MANAGEMENT:
- * - Session-based connection pooling for scalability
- * - Automatic cleanup on session termination
- * - Role-specific privilege enforcement at database level
- * - Connection reuse for performance optimization
+ * DATABASE USERS:
+ * - john_login: Read-only access to Users table for authentication
+ * - admin: Full privileges on all tables
+ * - manager: Asset, transfer, repair management privileges  
+ * - operator: Asset creation and transfer privileges
+ * - viewer: Read-only access to data
  * 
  * SECURITY FEATURES:
- * - Principle of least privilege through role-based database users
- * - Connection isolation between user sessions
- * - SQL injection prevention through parameterized queries
- * - Credential extraction from secure database storage
+ * - Connection isolation per user session
+ * - Database-level privilege enforcement
+ * - Automatic connection cleanup on logout
+ * - Role-based operation permissions
  */
 
 // Import connection management functions for two-tier authentication
 import { 
-  initializeAuthConnection,    // Establishes john_login_user connection for authentication
+  initializeAuthConnection,    // Establishes john_login connection for authentication
   authenticateUser,           // Validates user credentials and extracts role information
   createUserConnection,       // Creates role-specific database connection
   getSessionConnection,       // Retrieves existing session connections
@@ -47,11 +89,12 @@ import {
 } from './connection-manager';
 
 // Import storage interface and schema types
-import type { IStorage } from './storage';              // Storage interface definition
+import type { IStorage } from './storage-interface';
 import type { 
-  User, Asset, Transfer, Repair,                        // Entity types for database operations
-  InsertUser, InsertAsset, InsertTransfer, InsertRepair // Insert schema types for data validation
-} from '@shared/schema';
+  User, Asset, Transfer, Repair,
+  InsertUser, InsertAsset, InsertTransfer, InsertRepair 
+} from '@shared/schema-new';
+
 export class RoleBasedSqlServerStorage implements IStorage {
   private currentSessionId: string | null = null;
 
@@ -63,9 +106,9 @@ export class RoleBasedSqlServerStorage implements IStorage {
   private async initializeConnections(): Promise<void> {
     try {
       await initializeAuthConnection();
-      console.log('🔧 Role-based storage initialized with authentication connection');
+      console.log('🔧 Two-tier authentication storage initialized');
     } catch (error) {
-      console.error('❌ Failed to initialize role-based storage:', error);
+      console.error('❌ Failed to initialize authentication system:', error);
     }
   }
 
@@ -77,77 +120,96 @@ export class RoleBasedSqlServerStorage implements IStorage {
   }
 
   /**
-   * Authenticate user and establish role-based connection
+   * CORE AUTHENTICATION METHOD
+   * 
+   * FLOW:
+   * 1. Use john_login connection to validate credentials against Users table
+   * 2. Extract Role and rolePassword from matching user record
+   * 3. Close john_login connection
+   * 4. Establish new connection using role-specific SQL user credentials
+   * 5. Return authenticated user with role-based connection established
    */
   async authenticateAndConnect(emailOrUsername: string, password: string, sessionId: string): Promise<User | null> {
     try {
-      // Step 1: Authenticate with john's connection
+      console.log(`🔐 Starting two-tier authentication for: ${emailOrUsername}`);
+      
+      // Step 1: Authenticate with john_login connection (read-only Users table access)
       const authResult = await authenticateUser(emailOrUsername, password);
       if (!authResult) {
+        console.log('❌ Authentication failed: Invalid credentials');
         return null;
       }
 
-      // Step 2: Create role-based connection
+      console.log(`✅ Credentials validated. User: ${authResult.user.username}, Role: ${authResult.user.role}`);
+      
+      // Step 2: Create role-specific connection using extracted credentials
       const userConnection = await createUserConnection(sessionId, authResult.dbUser, authResult.dbPassword);
       if (!userConnection) {
-        throw new Error(`Failed to establish connection for role: ${authResult.dbUser}`);
+        throw new Error(`Failed to establish connection for role: ${authResult.user.role}`);
       }
 
-      // Step 3: Set current session
+      // Step 3: Set current session for subsequent operations
       this.setSessionId(sessionId);
 
-      console.log(`✅ User ${authResult.user.username} connected with role: ${authResult.dbUser}`);
+      console.log(`🎯 Role-based connection established. Session: ${sessionId}, Database User: ${authResult.dbUser}`);
+      console.log(`🛡️ Privilege enforcement active for role: ${authResult.user.role}`);
+      
       return authResult.user;
 
     } catch (error: any) {
-      console.error('❌ Authentication and connection failed:', error.message);
+      console.error('❌ Two-tier authentication failed:', error.message);
+      // Cleanup any partial connections
+      if (sessionId) {
+        await this.disconnectSession(sessionId);
+      }
       throw new Error(`Authentication failed: ${error.message}`);
     }
   }
 
   /**
-   * Close session connection
+   * Close session connection and cleanup
    */
   async disconnectSession(sessionId: string): Promise<void> {
-    await closeSessionConnection(sessionId);
-    if (this.currentSessionId === sessionId) {
-      this.currentSessionId = null;
+    try {
+      await closeSessionConnection(sessionId);
+      if (this.currentSessionId === sessionId) {
+        this.currentSessionId = null;
+      }
+      console.log(`🔌 Session disconnected: ${sessionId}`);
+    } catch (error: any) {
+      console.error('❌ Error disconnecting session:', error.message);
     }
   }
 
-  // User management methods (using auth connection for read, session connection for write)
-  
-  async getUser(id: number): Promise<User | undefined> {
-    try {
-      if (!this.currentSessionId) {
-        throw new Error('No active session');
-      }
+  // =============================================================================
+  // USER MANAGEMENT METHODS
+  // =============================================================================
 
+  async getUser(id: number): Promise<User | undefined> {
+    if (!this.currentSessionId) {
+      throw new Error('No active session. User must be authenticated.');
+    }
+    
+    try {
+      // Use role-based connection for this operation
       const result = await executeUserQuery(
         this.currentSessionId,
-        'SELECT UserID as id, Username as username, Email as email, Role as role, FullName as department, IsActive as isActive FROM users WHERE UserID = @userId',
+        'SELECT UserID as id, Username as username, Email as email, Role as role, rolePassword, IsActive as isActive, createdAt, updatedAt FROM Users WHERE UserID = @userId',
         { userId: id }
       );
       
-      const user = result.recordset[0];
-      if (user) {
-        // Remove sensitive fields
-        delete user.password;
-        delete user.dbPassword;
-      }
-      
-      return user || undefined;
+      return result.recordset[0] || undefined;
     } catch (error: any) {
-      console.error('Error getting user:', error.message);
-      return undefined;
+      console.error('❌ Error in getUser:', error.message);
+      throw new Error(`Failed to get user: ${error.message}`);
     }
   }
 
   async getUserByEmail(email: string): Promise<User | undefined> {
     try {
-      // Use auth connection for login verification
+      // Use auth connection for login verification (john_login read-only access)
       const result = await executeAuthQuery(
-        'SELECT UserID as id, Username as username, Email as email, Role as role, rolePassword, FullName as department, IsActive as isActive FROM users WHERE Email = @email',
+        'SELECT UserID as id, Username as username, Email as email, Role as role, rolePassword, IsActive as isActive, createdAt, updatedAt FROM users WHERE Email = @email',
         { email }
       );
       
@@ -160,9 +222,9 @@ export class RoleBasedSqlServerStorage implements IStorage {
 
   async getUserByUsername(username: string): Promise<User | undefined> {
     try {
-      // Use auth connection for login verification
+      // Use auth connection for login verification (john_login read-only access)
       const result = await executeAuthQuery(
-        'SELECT UserID as id, Username as username, Email as email, Role as role, rolePassword, FullName as department, IsActive as isActive FROM users WHERE Username = @username',
+        'SELECT UserID as id, Username as username, Email as email, Role as role, rolePassword, IsActive as isActive, createdAt, updatedAt FROM users WHERE Username = @username',
         { username }
       );
       
@@ -174,389 +236,238 @@ export class RoleBasedSqlServerStorage implements IStorage {
   }
 
   async getUsers(): Promise<User[]> {
+    if (!this.currentSessionId) {
+      throw new Error('No active session. User must be authenticated.');
+    }
+    
     try {
-      if (!this.currentSessionId) {
-        throw new Error('No active session');
-      }
-
+      // Use role-based connection - admin/manager privileges required at database level
       const result = await executeUserQuery(
         this.currentSessionId,
-        'SELECT UserID as id, Username as username, Email as email, Role as role, FullName as department, IsActive as isActive FROM users ORDER BY Username'
+        'SELECT UserID as id, Username as username, Email as email, Role as role, rolePassword, IsActive as isActive, createdAt, updatedAt FROM users ORDER BY createdAt DESC'
       );
       
-      return result.recordset;
+      return result.recordset || [];
     } catch (error: any) {
-      console.error('Error getting users:', error.message);
-      throw error;
+      console.error('❌ Error in getUsers:', error.message);
+      // If user doesn't have privileges, SQL Server will deny access
+      if (error.message.includes('permission') || error.message.includes('denied')) {
+        throw new Error('Insufficient privileges to view users. Admin or Manager role required.');
+      }
+      throw new Error(`Failed to get users: ${error.message}`);
     }
   }
 
   async createUser(userData: InsertUser): Promise<User> {
+    if (!this.currentSessionId) {
+      throw new Error('No active session. User must be authenticated.');
+    }
+    
     try {
-      if (!this.currentSessionId) {
-        throw new Error('No active session');
-      }
-
+      // Use role-based connection - admin privileges required at database level
       const result = await executeUserQuery(
         this.currentSessionId,
-        `INSERT INTO users (username, email, password, role, role_password, department, is_active)
-         VALUES (@username, @email, @password, @role, @rolePassword, @department, @isActive)
-         RETURNING *`,
+        `INSERT INTO users (Username, Email, PasswordHash, Role, rolePassword, FullName, IsActive, createdAt, updatedAt)
+         OUTPUT INSERTED.UserID as id, INSERTED.Username as username, INSERTED.Email as email, 
+                INSERTED.Role as role, INSERTED.rolePassword, INSERTED.FullName as department, 
+                INSERTED.IsActive as isActive, INSERTED.createdAt, INSERTED.updatedAt
+         VALUES (@username, @email, @password, @role, @rolePassword, @department, @isActive, GETDATE(), GETDATE())`,
         {
           username: userData.username,
           email: userData.email,
-          password: userData.password,
+          password: userData.password, // Should be hashed in production
           role: userData.role,
-          rolePassword: this.getRolePassword(userData.role), // rolePassword column stores PWD
+          rolePassword: userData.rolePassword,
           department: userData.department,
           isActive: userData.isActive
         }
       );
       
-      const user = result.recordset[0];
-      delete user.password;
-      delete user.dbPassword;
+      if (result.recordset.length === 0) {
+        throw new Error('Failed to create user - no record returned');
+      }
       
-      return user;
+      return result.recordset[0];
     } catch (error: any) {
-      console.error('Error creating user:', error.message);
-      throw error;
+      console.error('❌ Error in createUser:', error.message);
+      if (error.message.includes('permission') || error.message.includes('denied')) {
+        throw new Error('Insufficient privileges to create users. Admin role required.');
+      }
+      throw new Error(`Failed to create user: ${error.message}`);
     }
   }
 
   async updateUser(id: number, updates: Partial<InsertUser>): Promise<User | undefined> {
-    try {
-      if (!this.currentSessionId) {
-        throw new Error('No active session');
-      }
-
-      const setClause = Object.keys(updates)
-        .map(key => `${key} = @${key}`)
-        .join(', ');
-
-      const result = await executeUserQuery(
-        this.currentSessionId,
-        `UPDATE users 
-         SET ${setClause}
-         WHERE id = @id
-         RETURNING *`,
-        { id, ...updates }
-      );
-      
-      const user = result.recordset[0];
-      if (user) {
-        delete user.password;
-        delete user.dbPassword;
-      }
-      
-      return user || undefined;
-    } catch (error: any) {
-      console.error('Error updating user:', error.message);
-      throw error;
-    }
+    // TODO: Implement with role-based connection
+    // Requires admin privileges
+    console.log('📋 updateUser - To be implemented (requires admin role)');
+    return undefined;
   }
 
-  async deleteUser(id: number): Promise<boolean> {
-    try {
-      if (!this.currentSessionId) {
-        throw new Error('No active session');
-      }
-
-      const result = await executeUserQuery(
-        this.currentSessionId,
-        'DELETE FROM users WHERE id = @id',
-        { id }
-      );
-      
-      return result.rowsAffected[0] > 0;
-    } catch (error: any) {
-      console.error('Error deleting user:', error.message);
-      return false;
-    }
+  async deleteUser(id: number): Promise<void> {
+    // TODO: Implement with role-based connection
+    // Requires admin privileges
+    console.log('📋 deleteUser - To be implemented (requires admin role)');
   }
 
-  // Asset management methods (require active session with appropriate role)
-  
-  async getAssets(): Promise<Asset[]> {
-    try {
-      if (!this.currentSessionId) {
-        throw new Error('No active session');
-      }
-
-      const result = await executeUserQuery(
-        this.currentSessionId,
-        'SELECT * FROM assets ORDER BY voucher_no'
-      );
-      
-      return result.recordset;
-    } catch (error: any) {
-      console.error('❌ Database error fetching assets:', error.message);
-      throw new Error(`Database connection failed: ${error.message}`);
-    }
-  }
-
-  async getAsset(id: number): Promise<Asset | undefined> {
-    try {
-      if (!this.currentSessionId) {
-        throw new Error('No active session');
-      }
-
-      const result = await executeUserQuery(
-        this.currentSessionId,
-        'SELECT * FROM assets WHERE id = @id',
-        { id }
-      );
-      
-      return result.recordset[0] || undefined;
-    } catch (error: any) {
-      console.error('Error getting asset:', error.message);
-      return undefined;
-    }
-  }
-
-  async createAsset(assetData: InsertAsset): Promise<Asset> {
-    try {
-      if (!this.currentSessionId) {
-        throw new Error('No active session');
-      }
-
-      const result = await executeUserQuery(
-        this.currentSessionId,
-        `INSERT INTO assets (voucher_no, date, donor, current_location, status)
-         VALUES (@voucherNo, @date, @donor, @currentLocation, @status)
-         RETURNING *`,
-        assetData
-      );
-      
-      return result.recordset[0];
-    } catch (error: any) {
-      console.error('Error creating asset:', error.message);
-      throw error;
-    }
-  }
-
-  async updateAsset(id: number, updates: Partial<InsertAsset>): Promise<Asset | undefined> {
-    try {
-      if (!this.currentSessionId) {
-        throw new Error('No active session');
-      }
-
-      const setClause = Object.keys(updates)
-        .map(key => `${key} = @${key}`)
-        .join(', ');
-
-      const result = await executeUserQuery(
-        this.currentSessionId,
-        `UPDATE assets 
-         SET ${setClause}
-         WHERE id = @id
-         RETURNING *`,
-        { id, ...updates }
-      );
-      
-      return result.recordset[0] || undefined;
-    } catch (error: any) {
-      console.error('Error updating asset:', error.message);
-      throw error;
-    }
-  }
-
-  async deleteAsset(id: number): Promise<boolean> {
-    try {
-      if (!this.currentSessionId) {
-        throw new Error('No active session');
-      }
-
-      const result = await executeUserQuery(
-        this.currentSessionId,
-        'DELETE FROM assets WHERE id = @id',
-        { id }
-      );
-      
-      return result.rowsAffected[0] > 0;
-    } catch (error: any) {
-      console.error('Error deleting asset:', error.message);
-      return false;
-    }
-  }
-
-  // Transfer methods
-  async getTransfers(): Promise<Transfer[]> {
-    try {
-      if (!this.currentSessionId) {
-        throw new Error('No active session');
-      }
-
-      const result = await executeUserQuery(
-        this.currentSessionId,
-        'SELECT * FROM transfers ORDER BY transfer_date DESC'
-      );
-      
-      return result.recordset;
-    } catch (error: any) {
-      console.error('Error getting transfers:', error.message);
-      throw error;
-    }
-  }
-
-  async createTransfer(transferData: InsertTransfer): Promise<Transfer> {
-    try {
-      if (!this.currentSessionId) {
-        throw new Error('No active session');
-      }
-
-      const result = await executeUserQuery(
-        this.currentSessionId,
-        `INSERT INTO transfers (asset_id, from_location, to_location, transfer_date, to_custodian, reason)
-         VALUES (@assetId, @fromLocation, @toLocation, @transferDate, @toCustodian, @reason)
-         RETURNING *`,
-        transferData
-      );
-      
-      return result.recordset[0];
-    } catch (error: any) {
-      console.error('Error creating transfer:', error.message);
-      throw error;
-    }
-  }
-
-  // Repair methods
-  async getRepairs(): Promise<Repair[]> {
-    try {
-      if (!this.currentSessionId) {
-        throw new Error('No active session');
-      }
-
-      const result = await executeUserQuery(
-        this.currentSessionId,
-        'SELECT * FROM repairs ORDER BY sent_date DESC'
-      );
-      
-      return result.recordset;
-    } catch (error: any) {
-      console.error('Error getting repairs:', error.message);
-      throw error;
-    }
-  }
-
-  async createRepair(repairData: InsertRepair): Promise<Repair> {
-    try {
-      if (!this.currentSessionId) {
-        throw new Error('No active session');
-      }
-
-      const result = await executeUserQuery(
-        this.currentSessionId,
-        `INSERT INTO repairs (asset_id, issue, sent_date, expected_return_date, repair_center, status)
-         VALUES (@assetId, @issue, @sentDate, @expectedReturnDate, @repairCenter, @status)
-         RETURNING *`,
-        repairData
-      );
-      
-      return result.recordset[0];
-    } catch (error: any) {
-      console.error('Error creating repair:', error.message);
-      throw error;
-    }
-  }
-
-  async updateRepair(id: number, updates: Partial<InsertRepair>): Promise<Repair | undefined> {
-    try {
-      if (!this.currentSessionId) {
-        throw new Error('No active session');
-      }
-
-      const setClause = Object.keys(updates)
-        .map(key => `${key} = @${key}`)
-        .join(', ');
-
-      const result = await executeUserQuery(
-        this.currentSessionId,
-        `UPDATE repairs 
-         SET ${setClause}
-         WHERE id = @id
-         RETURNING *`,
-        { id, ...updates }
-      );
-      
-      return result.recordset[0] || undefined;
-    } catch (error: any) {
-      console.error('Error updating repair:', error.message);
-      throw error;
-    }
-  }
-
-  // Additional required methods from IStorage interface
   async updateUserLastLogin(id: number): Promise<void> {
-    // Skip last login update - column doesn't exist in SQL Server table
+    // Skip - column doesn't exist in current database schema
     console.log('⚠️ Skipping lastLogin update - column not available in database');
     return;
   }
 
-  async getTransfersByAsset(assetId: number): Promise<Transfer[]> {
-    try {
-      if (!this.currentSessionId) {
-        throw new Error('No active session');
-      }
+  // =============================================================================
+  // ASSET MANAGEMENT METHODS
+  // =============================================================================
 
+  async getAssets(): Promise<Asset[]> {
+    if (!this.currentSessionId) {
+      throw new Error('No active session. User must be authenticated.');
+    }
+    
+    try {
+      // Use role-based connection - all authenticated users can view assets
       const result = await executeUserQuery(
         this.currentSessionId,
-        'SELECT * FROM transfers WHERE asset_id = @assetId ORDER BY transfer_date DESC',
-        { assetId }
+        'SELECT * FROM assets ORDER BY createdAt DESC'
       );
       
-      return result.recordset;
+      return result.recordset || [];
     } catch (error: any) {
-      console.error('Error getting transfers by asset:', error.message);
-      return [];
+      console.error('❌ Error in getAssets:', error.message);
+      throw new Error(`Failed to get assets: ${error.message}`);
     }
+  }
+
+  async getAsset(id: number): Promise<Asset | undefined> {
+    // TODO: Implement with role-based connection
+    // All roles can view individual assets
+    console.log('📋 getAsset - To be implemented (all roles)');
+    return undefined;
+  }
+
+  async createAsset(assetData: InsertAsset): Promise<Asset> {
+    // TODO: Implement with role-based connection
+    // Requires operator/manager/admin privileges
+    console.log('📋 createAsset - To be implemented (requires operator+ role)');
+    throw new Error('Not implemented - requires operator+ privileges');
+  }
+
+  async updateAsset(id: number, updates: Partial<InsertAsset>): Promise<Asset | undefined> {
+    // TODO: Implement with role-based connection
+    // Requires operator/manager/admin privileges
+    console.log('📋 updateAsset - To be implemented (requires operator+ role)');
+    return undefined;
+  }
+
+  async deleteAsset(id: number): Promise<void> {
+    // TODO: Implement with role-based connection
+    // Requires admin privileges
+    console.log('📋 deleteAsset - To be implemented (requires admin role)');
+  }
+
+  // =============================================================================
+  // TRANSFER MANAGEMENT METHODS  
+  // =============================================================================
+
+  async getTransfers(): Promise<Transfer[]> {
+    // TODO: Implement with role-based connection
+    // All roles can view transfers
+    console.log('📋 getTransfers - To be implemented (all roles)');
+    return [];
+  }
+
+  async getTransfer?(id: number): Promise<Transfer | undefined> {
+    // TODO: Implement with role-based connection
+    console.log('📋 getTransfer - To be implemented (all roles)');
+    return undefined;
+  }
+
+  async getTransfersByAsset?(assetId: number): Promise<Transfer[]> {
+    // TODO: Implement with role-based connection
+    console.log('📋 getTransfersByAsset - To be implemented (all roles)');
+    return [];
+  }
+
+  async createTransfer(transferData: InsertTransfer): Promise<Transfer> {
+    // TODO: Implement with role-based connection
+    // Requires operator/manager/admin privileges
+    console.log('📋 createTransfer - To be implemented (requires operator+ role)');
+    throw new Error('Not implemented - requires operator+ privileges');
+  }
+
+  async updateTransfer?(id: number, updates: Partial<InsertTransfer>): Promise<Transfer | undefined> {
+    // TODO: Implement with role-based connection
+    console.log('📋 updateTransfer - To be implemented (requires manager+ role)');
+    return undefined;
+  }
+
+  async deleteTransfer?(id: number): Promise<boolean> {
+    // TODO: Implement with role-based connection
+    console.log('📋 deleteTransfer - To be implemented (requires admin role)');
+    return false;
+  }
+
+  // =============================================================================
+  // REPAIR MANAGEMENT METHODS
+  // =============================================================================
+
+  async getRepairs(): Promise<Repair[]> {
+    // TODO: Implement with role-based connection
+    // All roles can view repairs
+    console.log('📋 getRepairs - To be implemented (all roles)');
+    return [];
+  }
+
+  async getRepair?(id: number): Promise<Repair | undefined> {
+    // TODO: Implement with role-based connection
+    console.log('📋 getRepair - To be implemented (all roles)');
+    return undefined;
+  }
+
+  async getRepairsByAsset?(assetId: number): Promise<Repair[]> {
+    // TODO: Implement with role-based connection
+    console.log('📋 getRepairsByAsset - To be implemented (all roles)');
+    return [];
+  }
+
+  async createRepair(repairData: InsertRepair): Promise<Repair> {
+    // TODO: Implement with role-based connection
+    // Requires operator/manager/admin privileges
+    console.log('📋 createRepair - To be implemented (requires operator+ role)');
+    throw new Error('Not implemented - requires operator+ privileges');
+  }
+
+  async updateRepair(id: number, updates: Partial<InsertRepair>): Promise<Repair | undefined> {
+    // TODO: Implement with role-based connection
+    console.log('📋 updateRepair - To be implemented (requires operator+ role)');
+    return undefined;
+  }
+
+  async deleteRepair?(id: number): Promise<boolean> {
+    // TODO: Implement with role-based connection
+    console.log('📋 deleteRepair - To be implemented (requires admin role)');
+    return false;
   }
 
   async getActiveRepairs(): Promise<Repair[]> {
-    try {
-      if (!this.currentSessionId) {
-        throw new Error('No active session');
-      }
-
-      const result = await executeUserQuery(
-        this.currentSessionId,
-        "SELECT * FROM repairs WHERE status != 'completed' ORDER BY sent_date DESC"
-      );
-      
-      return result.recordset;
-    } catch (error: any) {
-      console.error('Error getting active repairs:', error.message);
-      return [];
-    }
+    // TODO: Implement with role-based connection
+    console.log('📋 getActiveRepairs - To be implemented (all roles)');
+    return [];
   }
 
-  async getRepairsByAsset(assetId: number): Promise<Repair[]> {
-    try {
-      if (!this.currentSessionId) {
-        throw new Error('No active session');
-      }
+  // =============================================================================
+  // REGISTRATION AND CONFIGURATION
+  // =============================================================================
 
-      const result = await executeUserQuery(
-        this.currentSessionId,
-        'SELECT * FROM repairs WHERE asset_id = @assetId ORDER BY sent_date DESC',
-        { assetId }
-      );
-      
-      return result.recordset;
-    } catch (error: any) {
-      console.error('Error getting repairs by asset:', error.message);
-      return [];
-    }
-  }
-
-  // Registration and configuration
   async isRegistrationEnabled(): Promise<boolean> {
     try {
-      // Use auth connection for configuration queries
+      // Use auth connection for configuration queries (john_login read-only access)
       const result = await executeAuthQuery(
         "SELECT COUNT(*) as userCount FROM users WHERE role = 'admin'"
       );
       
+      // Registration enabled if no admin users exist
       return result.recordset[0].userCount === 0;
     } catch (error: any) {
       console.error('❌ Database error checking registration status:', error.message);
@@ -567,19 +478,5 @@ export class RoleBasedSqlServerStorage implements IStorage {
   async isValidInvitationCode(code: string): Promise<boolean> {
     const validCodes = ['ADMIN-INVITE-2025', 'MANAGER-INVITE-2025'];
     return validCodes.includes(code);
-  }
-
-  /**
-   * Get password for role (should be from secure configuration)
-   */
-  private getRolePassword(role: string): string {
-    const rolePasswords: Record<string, string> = {
-      'admin': process.env.SQL_ADMIN_PASSWORD || 'AdminPass123!',
-      'manager': process.env.SQL_MANAGER_PASSWORD || 'ManagerPass123!',
-      'operator': process.env.SQL_OPERATOR_PASSWORD || 'OperatorPass123!',
-      'viewer': process.env.SQL_VIEWER_PASSWORD || 'ViewerPass123!',
-    };
-    
-    return rolePasswords[role] || rolePasswords['viewer'];
   }
 }

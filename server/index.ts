@@ -1,7 +1,8 @@
 import express, { type Request, Response, NextFunction } from "express";
 import session from "express-session";
 import MemoryStore from "memorystore";
-import { registerRoutes } from "./routes";
+import { createServer } from "http";
+import router from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 
 // Load environment variables
@@ -17,15 +18,14 @@ console.log('NODE_ENV:', process.env.NODE_ENV);
 declare module 'express-session' {
   interface SessionData {
     userId: number;
+    sessionId: string; // Add sessionId for role-based connection management
   }
 }
 
 const app = express();
 // Enable CORS for credentials - fix for development
 app.use((req, res, next) => {
-  // For development, allow the specific Replit domain
   const allowedOrigins = [
-    'https://2922ab8c-96b8-471d-8d25-149ae7dc5852-00-2117gqcuxpp1z.spock.replit.dev',
     'http://localhost:5000',
     req.headers.origin
   ];
@@ -76,12 +76,12 @@ app.use(session({
   rolling: true,    // Reset expiration on every request
   cookie: {
     secure: false,    // False for HTTP development
-    httpOnly: false,  // Allow JavaScript access for debugging
+    httpOnly: true,   // True for security - prevents JavaScript access
     maxAge: 24 * 60 * 60 * 1000, // 24 hours
     sameSite: 'lax',  // Lax for cross-origin compatibility
     path: '/'         // Available on all paths
   },
-  name: 'sessionid'
+  name: 'connect.sid'  // Match standard Express session cookie name
 }));
 
 app.use((req, res, next) => {
@@ -115,7 +115,11 @@ app.use((req, res, next) => {
 });
 
 (async () => {
-  const server = await registerRoutes(app);
+  // Register API routes
+  app.use('/api', router);
+
+  // Create HTTP server
+  const server = createServer(app);
 
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
     const status = err.status || err.statusCode || 500;
@@ -128,9 +132,14 @@ app.use((req, res, next) => {
   // importantly only setup vite in development and after
   // setting up all the other routes so the catch-all route
   // doesn't interfere with the other routes
-  if (app.get("env") === "development") {
+  const nodeEnv = (process.env.NODE_ENV || app.get("env")).trim().toLowerCase();
+  console.log(`🔍 Detected environment: "${nodeEnv}" (NODE_ENV: "${process.env.NODE_ENV}", app.env: "${app.get("env")}")`);
+  
+  if (nodeEnv === "development") {
+    console.log('✅ Starting in DEVELOPMENT mode - using Vite dev server');
     await setupVite(app, server);
   } else {
+    console.log('✅ Starting in PRODUCTION mode - serving static files');
     serveStatic(app);
   }
 
@@ -141,8 +150,7 @@ app.use((req, res, next) => {
   const port = parseInt(process.env.PORT || '5000', 10);
   server.listen({
     port,
-    host: "0.0.0.0",
-    reusePort: true,
+    host: "127.0.0.1",
   }, () => {
     log(`serving on port ${port}`);
   });

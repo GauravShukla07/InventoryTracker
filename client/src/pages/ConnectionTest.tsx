@@ -195,6 +195,28 @@ export default function ConnectionTest() {
         })
       });
 
+      // CHECK IF RESPONSE IS OK
+      if (!response.ok) {
+        setQueryResult({
+          success: false,
+          message: `API Error: ${response.status} ${response.statusText}`,
+          error: `Server returned ${response.status} status`
+        });
+        return;
+      }
+
+      // CHECK IF RESPONSE IS JSON
+      const contentType = response.headers.get('content-type');
+      if (!contentType || !contentType.includes('application/json')) {
+        const text = await response.text();
+        setQueryResult({
+          success: false,
+          message: 'Invalid API response format',
+          error: `Expected JSON but received: ${contentType}. Response: ${text.substring(0, 200)}`
+        });
+        return;
+      }
+
       // PROCESS QUERY RESPONSE
       const result = await response.json();      // Parse JSON response from backend
       setQueryResult(result);                    // Update UI with query results
@@ -238,6 +260,30 @@ export default function ConnectionTest() {
         })
       });
 
+      // CHECK IF RESPONSE IS OK
+      if (!response.ok) {
+        setTestResult({
+          success: false,
+          message: `API Error: ${response.status} ${response.statusText}`,
+          error: `Server returned ${response.status} status`
+        });
+        setIsConnected(false);
+        return;
+      }
+
+      // CHECK IF RESPONSE IS JSON
+      const contentType = response.headers.get('content-type');
+      if (!contentType || !contentType.includes('application/json')) {
+        const text = await response.text();
+        setTestResult({
+          success: false,
+          message: 'Invalid API response format',
+          error: `Expected JSON but received: ${contentType}. Response: ${text.substring(0, 200)}`
+        });
+        setIsConnected(false);
+        return;
+      }
+
       // PROCESS CONNECTION TEST RESPONSE
       const result = await response.json();      // Parse JSON response from backend
       setTestResult(result);                     // Update UI with connection test results
@@ -271,6 +317,22 @@ export default function ConnectionTest() {
     try {
       // FETCH PRESET CONNECTION TEST RESULTS
       const response = await fetch('/api/database/test-presets');
+      
+      // CHECK IF RESPONSE IS OK
+      if (!response.ok) {
+        console.error('Preset test API returned error:', response.status, response.statusText);
+        return;
+      }
+      
+      // CHECK IF RESPONSE IS JSON
+      const contentType = response.headers.get('content-type');
+      if (!contentType || !contentType.includes('application/json')) {
+        console.error('Preset test API returned non-JSON response:', contentType);
+        const text = await response.text();
+        console.error('Response body:', text);
+        return;
+      }
+      
       const data = await response.json();
       setPresetResults(data.results || []);      // Update UI with preset test results
     } catch (error) {
@@ -291,6 +353,22 @@ export default function ConnectionTest() {
     try {
       // FETCH ENVIRONMENT CONFIGURATION
       const response = await fetch('/api/database/environment');
+      
+      // CHECK IF RESPONSE IS OK
+      if (!response.ok) {
+        console.error('Environment API returned error:', response.status, response.statusText);
+        return;
+      }
+      
+      // CHECK IF RESPONSE IS JSON
+      const contentType = response.headers.get('content-type');
+      if (!contentType || !contentType.includes('application/json')) {
+        console.error('Environment API returned non-JSON response:', contentType);
+        const text = await response.text();
+        console.error('Response body:', text);
+        return;
+      }
+      
       const data = await response.json();
       setEnvironmentInfo(data.environment);      // Store environment info for display
     } catch (error) {
@@ -690,7 +768,7 @@ export default function ConnectionTest() {
                             <div className="text-sm text-muted-foreground">
                               <p>Execution time: {queryResult.executionTime}ms</p>
                               <p>Rows returned: {queryResult.rowCount}</p>
-                              {queryResult.affectedRows > 0 && <p>Affected rows: {queryResult.affectedRows}</p>}
+                              {queryResult.affectedRows && queryResult.affectedRows > 0 && <p>Affected rows: {queryResult.affectedRows}</p>}
                             </div>
                           )}
                           {!queryResult.success && queryResult.error && (

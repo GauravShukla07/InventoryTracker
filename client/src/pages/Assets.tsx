@@ -7,7 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
 import { Search, Filter, Eye, Edit, Trash2, Package } from "lucide-react";
-import type { Asset } from "@shared/schema";
+import type { Asset } from "@shared/schema-new";
 
 export default function Assets() {
   const [searchTerm, setSearchTerm] = useState("");
@@ -16,11 +16,15 @@ export default function Assets() {
 
   const { data: assets, isLoading } = useQuery({
     queryKey: ["/api/assets"],
+    queryFn: async () => {
+      const response = await apiRequest("/api/assets");
+      return response.json();
+    },
   });
 
   const deleteAssetMutation = useMutation({
     mutationFn: async (id: number) => {
-      await apiRequest("DELETE", `/api/assets/${id}`);
+      await apiRequest(`/api/assets/${id}`, { method: "DELETE" });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/assets"] });
@@ -38,11 +42,11 @@ export default function Assets() {
     },
   });
 
-  const filteredAssets = assets?.filter((asset: Asset) =>
+  const filteredAssets = (assets as Asset[])?.filter((asset: Asset) =>
     asset.voucherNo.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    asset.donor.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (asset.donor?.toLowerCase() || "").includes(searchTerm.toLowerCase()) ||
     asset.currentLocation.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    asset.projectName?.toLowerCase().includes(searchTerm.toLowerCase())
+    (asset.projectName?.toLowerCase() || "").includes(searchTerm.toLowerCase())
   ) || [];
 
   const getStatusBadge = (status: string) => {
@@ -60,8 +64,9 @@ export default function Assets() {
     );
   };
 
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString("en-US", {
+  const formatDate = (date: Date | string) => {
+    const dateObj = typeof date === 'string' ? new Date(date) : date;
+    return dateObj.toLocaleDateString("en-US", {
       month: "short",
       day: "numeric",
       year: "numeric",
@@ -208,7 +213,7 @@ export default function Assets() {
             {filteredAssets.length > 0 && (
               <div className="px-6 py-4 border-t border-border flex items-center justify-between">
                 <div className="text-sm text-muted-foreground">
-                  Showing {filteredAssets.length} of {assets?.length || 0} assets
+                  Showing {filteredAssets.length} of {(assets as Asset[])?.length || 0} assets
                 </div>
                 <div className="flex space-x-2">
                   <Button variant="outline" size="sm" disabled>

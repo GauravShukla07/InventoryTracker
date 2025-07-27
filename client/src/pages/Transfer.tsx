@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { insertTransferSchema, type InsertTransfer } from "@shared/schema";
+import { insertTransferSchema, type InsertTransfer } from "@shared/schema-new";
 import { apiRequest } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -18,6 +18,10 @@ export default function Transfer() {
 
   const { data: assets } = useQuery({
     queryKey: ["/api/assets"],
+    queryFn: async () => {
+      const response = await apiRequest("/api/assets");
+      return response.json();
+    },
   });
 
   const form = useForm<InsertTransfer>({
@@ -25,17 +29,15 @@ export default function Transfer() {
     defaultValues: {
       assetId: 0,
       toLocation: "",
-      toCustodian: "",
-      toOrganization: "",
-      reason: "",
-      transferDate: "",
       fromLocation: "",
-      fromCustodian: "",
+      reason: "",
+      transferDate: new Date(),
+      status: "pending",
     },
   });
 
   const selectedAssetId = form.watch("assetId");
-  const selectedAsset = assets?.find((asset: any) => asset.id === selectedAssetId);
+  const selectedAsset = Array.isArray(assets) ? assets.find((asset: any) => asset.id === selectedAssetId) : undefined;
 
   const transferAssetMutation = useMutation({
     mutationFn: async (data: InsertTransfer) => {
@@ -64,9 +66,9 @@ export default function Transfer() {
     transferAssetMutation.mutate(data);
   };
 
-  const availableAssets = assets?.filter((asset: any) => 
+  const availableAssets = Array.isArray(assets) ? assets.filter((asset: any) => 
     asset.status === "active" || asset.status === "transferred"
-  ) || [];
+  ) : [];
 
   return (
     <div className="p-6">
@@ -117,7 +119,11 @@ export default function Transfer() {
                       <FormItem>
                         <FormLabel>Transfer Date *</FormLabel>
                         <FormControl>
-                          <Input type="date" {...field} />
+                          <Input 
+                            type="date" 
+                            value={field.value instanceof Date ? field.value.toISOString().split('T')[0] : ''}
+                            onChange={(e) => field.onChange(new Date(e.target.value))}
+                          />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -146,14 +152,31 @@ export default function Transfer() {
                 )}
 
                 <div className="space-y-6">
-                  <h3 className="text-lg font-semibold text-foreground">New Location Information</h3>
+                  <h3 className="text-lg font-semibold text-foreground">Transfer Information</h3>
+                  
+                  <FormField
+                    control={form.control}
+                    name="fromLocation"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>From Location *</FormLabel>
+                        <FormControl>
+                          <Input 
+                            placeholder="Current location" 
+                            {...field} 
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
                   
                   <FormField
                     control={form.control}
                     name="toLocation"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>New Location Address *</FormLabel>
+                        <FormLabel>To Location *</FormLabel>
                         <FormControl>
                           <Textarea 
                             rows={3} 
@@ -165,36 +188,6 @@ export default function Transfer() {
                       </FormItem>
                     )}
                   />
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <FormField
-                      control={form.control}
-                      name="toCustodian"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>New Custodian Name *</FormLabel>
-                          <FormControl>
-                            <Input placeholder="Full name of new custodian" {...field} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-
-                    <FormField
-                      control={form.control}
-                      name="toOrganization"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>New Organization</FormLabel>
-                          <FormControl>
-                            <Input placeholder="Organization name" {...field} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  </div>
 
                   <FormField
                     control={form.control}

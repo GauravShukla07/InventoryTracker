@@ -71,7 +71,7 @@ export async function testDatabaseConnection(params: ConnectionTestParams): Prom
         idleTimeoutMillis: 5000
       }
     };
-    
+    console.log('sql config:', config);
     console.log(`🔧 Connection config: server=${config.server}, port=${config.port}, database=${config.database}, user=${config.user}`);
 
     // Attempt connection

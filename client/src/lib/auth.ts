@@ -1,4 +1,5 @@
 import { apiRequest } from "./queryClient";
+import type { LoginCredentials } from "@shared/schema-new";
 
 export interface User {
   id: number;
@@ -6,11 +7,6 @@ export interface User {
   email: string;
   lastLogin: string | null;
   createdAt: string;
-}
-
-export interface LoginCredentials {
-  email: string;
-  password: string;
 }
 
 export const authApi = {

@@ -12,7 +12,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useToast } from "@/hooks/use-toast";
 import { authApi } from "@/lib/auth";
 import { apiRequest } from "@/lib/queryClient";
-import { loginSchema, registerSchema, type LoginCredentials, type RegisterData } from "@shared/schema";
+import { loginSchema, registerSchema, type LoginCredentials, type RegisterData } from "@shared/schema-new";
 import { UserPlus, LogIn, Key, Info } from "lucide-react";
 import { ThemeToggle } from "@/components/theme-toggle";
 
@@ -25,7 +25,10 @@ export default function Login() {
   // Check if registration is enabled
   const { data: registrationStatus } = useQuery({
     queryKey: ["/api/auth/registration-status"],
-    queryFn: () => apiRequest("/api/auth/registration-status"),
+    queryFn: async () => {
+      const response = await apiRequest("/api/auth/registration-status");
+      return response.json();
+    },
   });
 
   const loginForm = useForm<LoginCredentials>({

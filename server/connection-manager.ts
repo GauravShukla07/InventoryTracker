@@ -20,31 +20,48 @@
 import sql from 'mssql'; // Microsoft SQL Server driver for Node.js
 
 // Base server connection configuration for SQL Server at 163.227.186.23:2499
-const SERVER_CONFIG = {
-  server: '163.227.186.23',          // Windows SQL Server IP address
-  database: 'USE InventoryDB',       // Target database name
-  port: 2499,                        // SQL Server port (non-standard for security)
-  options: {
-    encrypt: false,                  // Disable encryption for internal network
-    trustServerCertificate: true,    // Trust self-signed certificates  
-    enableArithAbort: true,          // Enable arithmetic abort for better error handling
-    connectTimeout: 60000,           // Connection timeout (60 seconds)
-    requestTimeout: 60000,           // Query timeout (60 seconds)
-    multipleActiveResultSets: true,  // Allow multiple result sets per connection
-  },
-  pool: {
-    max: 10,                         // Maximum connections in pool
-    min: 0,                          // Minimum connections in pool
-    idleTimeoutMillis: 30000         // Idle timeout before connection closes
-  }
+
+function createServerConfig(): sql.config {
+  const config = {
+    server: process.env.SQL_SERVER_HOST,          // Windows SQL Server IP address
+    database: process.env.SQL_DATABASE ,           // Target database name (FIXED: removed 'USE ')
+    port: parseInt(process.env.SQL_PORT || ''),                        // SQL Server port (non-standard for security)
+    options: {
+      encrypt: process.env.SQL_ENCRYPT === 'true' ? true : false,                  // Disable encryption for internal network
+      trustServerCertificate: process.env.SQL_TRUST_CERT === 'true' ? true : true,    // Trust self-signed certificates
+      enableArithAbort: true,          // Enable arithmetic abort for better error handling
+      connectTimeout: parseInt(process.env.SQL_TIMEOUT || '60000'),           // Connection timeout (60 seconds)
+      requestTimeout: parseInt(process.env.SQL_REQUEST_TIMEOUT || '60000'),           // Query timeout (60 seconds)
+      multipleActiveResultSets: true,  // Allow multiple result sets per connection
+    },
+    pool: {
+      max: 10,                         // Maximum connections in pool
+      min: 0,                          // Minimum connections in pool
+      idleTimeoutMillis: 30000         // Idle timeout before connection closes
+    }
+  };
+  // console.log('🔧 SQL Server connection config:', config);
+  return config as sql.config;
 };
 
 // Authentication user configuration (john_login_user with read-only access to Users table)
-const AUTH_USER_CONFIG: sql.config = {
-  ...SERVER_CONFIG,                                                    // Inherit base server config
-  user: process.env.SQL_AUTH_USER || 'john_login_user',               // Low-privilege authentication user
-  password: process.env.SQL_AUTH_PASSWORD || 'StrongPassword1!',      // Authentication password from environment
-};
+// Create this dynamically to ensure environment variables are properly loaded
+function createAuthUserConfig(): sql.config {
+  const config = {
+    ...createServerConfig(),                                                    // Inherit base server config
+    user: process.env.SQL_USER || '',               // Low-privilege authentication user
+    password: process.env.SQL_PASSWORD || '',      // Authentication password from environment
+  };
+  
+  // console.log('🔧 Creating AUTH_USER_CONFIG with values:');
+  // console.log('  server:', config.server);
+  // console.log('  database:', config.database);
+  // console.log('  port:', config.port);
+  // console.log('  user:', config.user);
+  // console.log('  password:', config.password ? '[SET]' : '[NOT SET]');
+  console.log('🔧 Auth connection config:', config);
+  return config as sql.config;
+}
 
 // Global connection state management
 const sessionConnections = new Map<string, sql.ConnectionPool>();     // Maps session IDs to role-specific connections
@@ -65,8 +82,12 @@ export async function initializeAuthConnection(): Promise<sql.ConnectionPool | n
     }
 
     console.log('🔧 Initializing authentication connection as john_login_user...');
+    
+    // Create config dynamically to ensure environment variables are loaded
+    const authUserConfig = createAuthUserConfig();
+    
     // Create new connection pool with authentication user credentials
-    authConnection = new sql.ConnectionPool(AUTH_USER_CONFIG);
+    authConnection = new sql.ConnectionPool(authUserConfig);
     await authConnection.connect();  // Establish connection to SQL Server
     
     console.log('✅ Authentication connection established');
@@ -99,15 +120,15 @@ export async function authenticateUser(emailOrUsername: string, password: string
     // Extract role (UID) and rolePassword (PWD) from Users table
     const result = await connection.request()
       .input('emailOrUsername', sql.VarChar, emailOrUsername)
-      .input('password', sql.VarChar, password) // In production, this should be hashed
+      .input('password', sql.VarChar, password) // TODO: In production, hash the password before comparison
       .query(`
         SELECT 
-          UserID as id, Username as username, Email as email, Role as role, rolePassword, FullName as department, IsActive as isActive
+          UserID as id, Username as username, Email as email, Role as role, rolePassword, IsActive as isActive
         FROM users 
         WHERE (Email = @emailOrUsername OR Username = @emailOrUsername) 
-        AND PasswordHash = @password
+        AND PasswordHash = @password -- TODO: Change to PasswordHash when implementing proper hashing
         AND IsActive = 1
-      `);
+      `); // FullName as department optional, currently not used in this database
 
     if (result.recordset.length === 0) {
       console.log('❌ Authentication failed: Invalid credentials or inactive user');
@@ -133,7 +154,7 @@ export async function authenticateUser(emailOrUsername: string, password: string
         username: user.username,
         email: user.email,
         role: user.role,
-        department: user.department,
+        // department: user.department, // Optional, not used in this database
         isActive: user.isActive, // Use actual IsActive value from database
         lastLogin: null // Column not available in this database
       },
@@ -158,10 +179,10 @@ export async function createUserConnection(sessionId: string, dbUser: string, db
     console.log(`🔄 Creating connection for user: ${dbUser}`);
     
     const userConfig: sql.config = {
-      ...SERVER_CONFIG,
+      ...createServerConfig(),
       user: dbUser,
       password: dbPassword,
-    };
+    } as sql.config;
 
     const connection = new sql.ConnectionPool(userConfig);
     await connection.connect();
@@ -272,10 +293,10 @@ function getDefaultRolePassword(role: string): string {
 export async function testConnection(user: string, password: string): Promise<boolean> {
   try {
     const testConfig: sql.config = {
-      ...SERVER_CONFIG,
+      ...createServerConfig(),
       user,
       password,
-    };
+    } as sql.config;
 
     const testPool = new sql.ConnectionPool(testConfig);
     await testPool.connect();
