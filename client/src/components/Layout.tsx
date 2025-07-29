@@ -17,8 +17,10 @@ import {
   Users,
   Menu,
   ChevronDown,
-  LogOut
+  LogOut,
+  Database
 } from "lucide-react";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -31,6 +33,7 @@ const navigation = [
   { name: "Transfer Assets", href: "/transfer", icon: ArrowLeftRight },
   { name: "Repair Tracking", href: "/repair", icon: Wrench },
   { name: "User Management", href: "/users", icon: Users, adminOnly: true },
+  { name: "Connection Test", href: "/connection-test", icon: Database },
   { name: "Reports", href: "/reports", icon: BarChart3 },
 ];
 
@@ -122,6 +125,8 @@ export default function Layout({ children }: LayoutProps) {
                 </p>
               </div>
             )}
+
+            <ThemeToggle />
 
             <DropdownMenu>
               <DropdownMenuTrigger asChild>

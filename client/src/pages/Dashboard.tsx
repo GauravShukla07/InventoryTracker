@@ -1,24 +1,28 @@
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Package, ArrowLeftRight, Wrench, TrendingUp } from "lucide-react";
+import { apiRequest } from "@/lib/queryClient";
 
 export default function Dashboard() {
   const { data: assets } = useQuery({
     queryKey: ["/api/assets"],
+    queryFn: () => apiRequest("/api/assets"),
   });
 
   const { data: repairs } = useQuery({
     queryKey: ["/api/repairs/active"],
+    queryFn: () => apiRequest("/api/repairs/active"),
   });
 
   const { data: transfers } = useQuery({
     queryKey: ["/api/transfers"],
+    queryFn: () => apiRequest("/api/transfers"),
   });
 
-  const totalAssets = assets?.length || 0;
-  const activeRepairs = repairs?.length || 0;
-  const totalTransfers = transfers?.length || 0;
-  const activeAssets = assets?.filter((asset: any) => asset.status === "active").length || 0;
+  const totalAssets = Array.isArray(assets) ? assets.length : 0;
+  const activeRepairs = Array.isArray(repairs) ? repairs.length : 0;
+  const totalTransfers = Array.isArray(transfers) ? transfers.length : 0;
+  const activeAssets = Array.isArray(assets) ? assets.filter((asset: any) => asset.status === "active").length : 0;
 
   const stats = [
     {
@@ -89,7 +93,7 @@ export default function Dashboard() {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              {assets && assets.length > 0 ? (
+              {Array.isArray(assets) && assets.length > 0 ? (
                 <div className="space-y-4">
                   {assets.slice(0, 5).map((asset: any) => (
                     <div key={asset.id} className="flex items-center justify-between border-b border-border pb-2 last:border-b-0">
@@ -126,7 +130,7 @@ export default function Dashboard() {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              {repairs && repairs.length > 0 ? (
+              {Array.isArray(repairs) && repairs.length > 0 ? (
                 <div className="space-y-4">
                   {repairs.slice(0, 5).map((repair: any) => (
                     <div key={repair.id} className="flex items-center justify-between border-b border-border pb-2 last:border-b-0">

@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useLocation } from "wouter";
+import { useLocation, Link } from "wouter";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,8 +12,10 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useToast } from "@/hooks/use-toast";
 import { authApi } from "@/lib/auth";
 import { apiRequest } from "@/lib/queryClient";
-import { loginSchema, registerSchema, type LoginCredentials, type RegisterData } from "@shared/schema";
+import { loginSchema, registerSchema, type LoginCredentials, type RegisterData } from "@shared/schema-new";
 import { UserPlus, LogIn, Key, Info } from "lucide-react";
+import { ThemeToggle } from "@/components/theme-toggle";
+import logger from "@shared/logger";
 
 export default function Login() {
   const { toast } = useToast();
@@ -24,13 +26,16 @@ export default function Login() {
   // Check if registration is enabled
   const { data: registrationStatus } = useQuery({
     queryKey: ["/api/auth/registration-status"],
-    queryFn: () => apiRequest("/api/auth/registration-status"),
+    queryFn: async () => {
+      const response = await apiRequest("/api/auth/registration-status");
+      return response.json();
+    },
   });
 
   const loginForm = useForm<LoginCredentials>({
     resolver: zodResolver(loginSchema),
     defaultValues: {
-      email: "",
+      email: "", // This field will accept both email and username
       password: "",
     },
   });
@@ -47,17 +52,31 @@ export default function Login() {
 
   const loginMutation = useMutation({
     mutationFn: authApi.login,
-    onSuccess: async (data) => {
+    onSuccess: async (data: any) => {
+      logger.info('🔐 Login successful, received data:', { 
+        hasUser: !!data.user, 
+        hasSessionId: !!data.sessionId,
+        userRole: data.user?.role 
+      });
+      
+      // Store session ID for subsequent requests
+      if (data.sessionId) {
+        localStorage.setItem('sessionId', data.sessionId);
+        logger.info('💾 Session ID stored in localStorage');
+      }
+      
       // Set the auth data in cache immediately
       queryClient.setQueryData(["/api/auth/me"], data);
       
-      // Wait a bit longer for cookies to be set, then verify authentication
-      await new Promise(resolve => setTimeout(resolve, 200));
+      // Wait a bit longer for session to be properly established
+      await new Promise(resolve => setTimeout(resolve, 500));
       
       try {
         // Verify authentication works by making a test call
+        logger.info('🔍 Testing authentication with /auth/me call...');
         await authApi.me();
         
+        logger.info('✅ Authentication verification successful');
         toast({
           title: "Welcome back!",
           description: "You have been successfully logged in",
@@ -68,8 +87,12 @@ export default function Login() {
         
         // Redirect to dashboard
         setLocation("/");
-      } catch (error) {
+      } catch (error: any) {
         // If verification fails, show error but don't redirect
+        logger.error("❌ Authentication verification failed:", {
+          error: error.message,
+          hasSessionId: !!localStorage.getItem('sessionId')
+        });
         toast({
           title: "Authentication issue",
           description: "Login succeeded but authentication verification failed. Please try refreshing the page.",
@@ -120,6 +143,11 @@ export default function Login() {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-background px-4">
+      {/* Theme Toggle in top right */}
+      <div className="absolute top-4 right-4">
+        <ThemeToggle />
+      </div>
+      
       <Card className="w-full max-w-md">
         <CardHeader className="space-y-1">
           <CardTitle className="text-2xl font-bold text-center">
@@ -150,14 +178,16 @@ export default function Login() {
                     name="email"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Email</FormLabel>
+                        <FormLabel>Email or Username</FormLabel>
                         <FormControl>
                           <Input
-                            type="email"
-                            placeholder="Enter your email"
+                            placeholder="Enter your email or username"
                             {...field}
                           />
                         </FormControl>
+                        <p className="text-xs text-muted-foreground">
+                          You can sign in with either your email address or username
+                        </p>
                         <FormMessage />
                       </FormItem>
                     )}
@@ -200,10 +230,11 @@ export default function Login() {
                 <Info className="h-4 w-4" />
                 <AlertDescription>
                   <strong>Demo Credentials:</strong><br />
-                  Admin: admin@inventory.com / password123<br />
-                  Manager: manager@inventory.com / manager123<br />
-                  Operator: operator@inventory.com / operator123<br />
-                  Viewer: viewer@inventory.com / viewer123
+                  You can login with either email or username:<br />
+                  Admin: admin@inventory.com (or "admin") / password123<br />
+                  Manager: manager@inventory.com (or "manager") / manager123<br />
+                  Operator: operator@inventory.com (or "operator") / operator123<br />
+                  Viewer: viewer@inventory.com (or "viewer") / viewer123
                 </AlertDescription>
               </Alert>
             </TabsContent>
@@ -321,6 +352,12 @@ export default function Login() {
                 </Alert>
               </TabsContent>
           </Tabs>
+          
+          <div className="mt-4 text-center">
+            <Link href="/connection-test" className="text-sm text-blue-600 hover:underline dark:text-blue-400">
+              Test Database Connection
+            </Link>
+          </div>
         </CardContent>
       </Card>
     </div>

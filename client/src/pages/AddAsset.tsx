@@ -1,7 +1,7 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { insertAssetSchema, type InsertAsset } from "@shared/schema";
+import { insertAssetSchema, type InsertAsset } from "@shared/schema-new";
 import { apiRequest } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -20,11 +20,11 @@ export default function AddAsset() {
     resolver: zodResolver(insertAssetSchema),
     defaultValues: {
       voucherNo: "",
-      date: "",
+      date: new Date(),
       donor: "",
       currentLocation: "",
       lostQuantity: 0,
-      lostAmount: "0",
+      lostAmount: 0,
       handoverPerson: "",
       handoverOrganization: "",
       transferRecipient: "",
@@ -34,7 +34,7 @@ export default function AddAsset() {
       isInsured: undefined,
       policyNumber: "",
       warranty: "",
-      warrantyValidity: "",
+      warrantyValidity: undefined,
       grn: "",
       status: "active",
     },
@@ -104,7 +104,11 @@ export default function AddAsset() {
                         <FormItem>
                           <FormLabel>Date *</FormLabel>
                           <FormControl>
-                            <Input type="date" {...field} />
+                            <Input 
+                              type="date" 
+                              value={field.value ? field.value.toISOString().split('T')[0] : ''}
+                              onChange={(e) => field.onChange(e.target.value ? new Date(e.target.value) : new Date())}
+                            />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
@@ -185,7 +189,8 @@ export default function AddAsset() {
                               min="0" 
                               step="0.01" 
                               placeholder="0.00" 
-                              {...field} 
+                              value={field.value || 0}
+                              onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)}
                             />
                           </FormControl>
                           <FormMessage />
@@ -376,7 +381,11 @@ export default function AddAsset() {
                         <FormItem>
                           <FormLabel>Warranty Validity</FormLabel>
                           <FormControl>
-                            <Input type="date" {...field} />
+                            <Input 
+                              type="date" 
+                              value={field.value ? field.value.toISOString().split('T')[0] : ''}
+                              onChange={(e) => field.onChange(e.target.value ? new Date(e.target.value) : undefined)}
+                            />
                           </FormControl>
                           <FormMessage />
                         </FormItem>

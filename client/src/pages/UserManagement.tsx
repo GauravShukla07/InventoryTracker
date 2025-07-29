@@ -44,7 +44,7 @@ import {
 } from "@/components/ui/form";
 import { Badge } from "@/components/ui/badge";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { insertUserSchema, updateUserSchema, type User, type InsertUser, type UpdateUser, type UserRole } from "@shared/schema";
+import { insertUserSchema, updateUserSchema, type User, type InsertUser, type UpdateUser, type UserRole } from "@shared/schema-new";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Plus, Edit, Trash2, Shield, Users, Eye, Settings, Key } from "lucide-react";
@@ -79,7 +79,10 @@ export default function UserManagement() {
 
   const { data: users = [], isLoading } = useQuery({
     queryKey: ["/api/users"],
-    queryFn: () => apiRequest("/api/users"),
+    queryFn: async () => {
+      const response = await apiRequest("/api/users");
+      return response.json();
+    },
   });
 
   const createForm = useForm<InsertUser>({
@@ -362,7 +365,7 @@ export default function UserManagement() {
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         {Object.entries(roleDescriptions).map(([role, description]) => {
           const Icon = roleIcons[role as UserRole];
-          const count = users.filter((user: User) => user.role === role).length;
+          const count = Array.isArray(users) ? users.filter((user: User) => user.role === role).length : 0;
           
           return (
             <Card key={role}>
@@ -400,7 +403,7 @@ export default function UserManagement() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {users.map((user: User) => {
+              {Array.isArray(users) && users.map((user: User) => {
                 const Icon = roleIcons[user.role as UserRole];
                 return (
                   <TableRow key={user.id}>
@@ -422,7 +425,7 @@ export default function UserManagement() {
                         {user.isActive ? "Active" : "Inactive"}
                       </Badge>
                     </TableCell>
-                    <TableCell>{formatDate(user.lastLogin)}</TableCell>
+                    <TableCell>{formatDate(user.lastLogin?.toISOString() || null)}</TableCell>
                     <TableCell>
                       <div className="flex items-center gap-2">
                         <Button

@@ -1,9 +1,9 @@
 {
   "name": "Inventory Management System",
-  "description": "A comprehensive inventory management system with multi-database support and role-based access control",
-  "repository": "https://github.com/your-username/inventory-management-system",
+  "description": "A comprehensive inventory management system with SQL Server database and role-based access control",
+  "repository": "https://github.com/GauravShukla07/InventoryTracker",
   "logo": "https://cdn.jsdelivr.net/npm/lucide@latest/icons/package.svg",
-  "keywords": ["inventory", "asset-management", "typescript", "react", "express", "postgresql"],
+  "keywords": ["inventory", "asset-management", "typescript", "react", "express", "mssql"],
   "image": "heroku/nodejs",
   "stack": "heroku-22",
   "buildpacks": [
@@ -17,14 +17,6 @@
       "size": "basic"
     }
   },
-  "addons": [
-    {
-      "plan": "heroku-postgresql:mini",
-      "options": {
-        "version": "14"
-      }
-    }
-  ],
   "env": {
     "NODE_ENV": {
       "description": "Node.js environment",
@@ -33,20 +25,22 @@
     "SESSION_SECRET": {
       "description": "Secret key for session encryption - use a long random string",
       "generator": "secret"
-    }
-  },
-  "scripts": {
-    "postdeploy": "npm run db:push"
-  },
-  "environments": {
-    "test": {
-      "addons": ["heroku-postgresql:mini"],
-      "env": {
-        "NODE_ENV": "test"
-      },
-      "scripts": {
-        "test": "npm test"
-      }
+    },
+    "SQL_SERVER_HOST": {
+      "description": "SQL Server hostname and port",
+      "required": true
+    },
+    "SQL_DATABASE": {
+      "description": "SQL Server database name",
+      "required": true
+    },
+    "SQL_USER": {
+      "description": "SQL Server username",
+      "required": true
+    },
+    "SQL_PASSWORD": {
+      "description": "SQL Server password",
+      "required": true
     }
   }
 }

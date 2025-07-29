@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { insertRepairSchema, type InsertRepair } from "@shared/schema";
+import { insertRepairSchema, type InsertRepair } from "@shared/schema-new";
 import { apiRequest } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -18,20 +18,28 @@ export default function Repair() {
 
   const { data: assets } = useQuery({
     queryKey: ["/api/assets"],
+    queryFn: async () => {
+      const response = await apiRequest("/api/assets");
+      return response.json();
+    },
   });
 
   const { data: activeRepairs } = useQuery({
     queryKey: ["/api/repairs/active"],
+    queryFn: async () => {
+      const response = await apiRequest("/api/repairs/active");
+      return response.json();
+    },
   });
 
   const form = useForm<InsertRepair>({
     resolver: zodResolver(insertRepairSchema),
     defaultValues: {
       assetId: 0,
-      issue: "",
-      repairCenter: "",
-      expectedReturnDate: "",
-      status: "in_repair",
+      description: "",
+      vendor: "",
+      repairDate: new Date(),
+      status: "pending",
     },
   });
 
@@ -61,9 +69,12 @@ export default function Repair() {
 
   const completeRepairMutation = useMutation({
     mutationFn: async (id: number) => {
-      const response = await apiRequest("PUT", `/api/repairs/${id}`, {
-        status: "completed",
-        actualReturnDate: new Date().toISOString(),
+      const response = await apiRequest(`/api/repairs/${id}`, {
+        method: "PUT",
+        body: {
+          status: "completed",
+          completedDate: new Date(),
+        },
       });
       return response.json();
     },
@@ -89,9 +100,9 @@ export default function Repair() {
     sendForRepairMutation.mutate(data);
   };
 
-  const availableAssets = assets?.filter((asset: any) => 
+  const availableAssets = Array.isArray(assets) ? assets.filter((asset: any) => 
     asset.status === "active" || asset.status === "transferred"
-  ) || [];
+  ) : [];
 
   const getStatusBadge = (status: string) => {
     const statusClasses = {
@@ -116,7 +127,7 @@ export default function Repair() {
   };
 
   const getAssetById = (id: number) => {
-    return assets?.find((asset: any) => asset.id === id);
+    return Array.isArray(assets) ? assets.find((asset: any) => asset.id === id) : undefined;
   };
 
   return (
@@ -164,7 +175,7 @@ export default function Repair() {
 
                   <FormField
                     control={form.control}
-                    name="issue"
+                    name="description"
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>Issue Description *</FormLabel>
@@ -183,12 +194,12 @@ export default function Repair() {
                   <div className="grid grid-cols-2 gap-4">
                     <FormField
                       control={form.control}
-                      name="repairCenter"
+                      name="vendor"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Repair Center</FormLabel>
+                          <FormLabel>Repair Vendor</FormLabel>
                           <FormControl>
-                            <Input placeholder="Repair center name" {...field} />
+                            <Input placeholder="Repair vendor name" {...field} />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
@@ -197,12 +208,16 @@ export default function Repair() {
 
                     <FormField
                       control={form.control}
-                      name="expectedReturnDate"
+                      name="repairDate"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Expected Return</FormLabel>
+                          <FormLabel>Repair Date</FormLabel>
                           <FormControl>
-                            <Input type="date" {...field} />
+                            <Input 
+                              type="date" 
+                              value={field.value instanceof Date ? field.value.toISOString().split('T')[0] : ''}
+                              onChange={(e) => field.onChange(new Date(e.target.value))}
+                            />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
@@ -234,7 +249,7 @@ export default function Repair() {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              {activeRepairs && activeRepairs.length > 0 ? (
+              {Array.isArray(activeRepairs) && activeRepairs.length > 0 ? (
                 <div className="space-y-4">
                   {activeRepairs.map((repair: any) => {
                     const asset = getAssetById(repair.assetId);
@@ -247,20 +262,20 @@ export default function Repair() {
                           {getStatusBadge(repair.status)}
                         </div>
                         <p className="text-sm text-muted-foreground mb-2">
-                          <span className="font-medium">Issue:</span> {repair.issue}
+                          <span className="font-medium">Issue:</span> {repair.description}
                         </p>
                         <div className="text-xs text-muted-foreground space-y-1">
-                          {repair.repairCenter && (
+                          {repair.vendor && (
                             <p>
-                              <span className="font-medium">Repair Center:</span> {repair.repairCenter}
+                              <span className="font-medium">Vendor:</span> {repair.vendor}
                             </p>
                           )}
                           <p>
-                            <span className="font-medium">Sent:</span> {formatDate(repair.sentDate)}
+                            <span className="font-medium">Repair Date:</span> {formatDate(repair.repairDate)}
                           </p>
-                          {repair.expectedReturnDate && (
+                          {repair.completedDate && (
                             <p>
-                              <span className="font-medium">Expected Return:</span> {formatDate(repair.expectedReturnDate)}
+                              <span className="font-medium">Completed:</span> {formatDate(repair.completedDate)}
                             </p>
                           )}
                         </div>

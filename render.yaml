@@ -5,21 +5,18 @@ services:
     region: oregon
     plan: starter
     buildCommand: npm run build
-    startCommand: npm start
-    healthCheckPath: /api/auth/registration-status
+    startCommand: npm run start:unix
+    healthCheckPath: /api/health
     envVars:
       - key: NODE_ENV
         value: production
       - key: SESSION_SECRET
         generateValue: true
-      - key: DATABASE_URL
-        fromDatabase:
-          name: inventory-db
-          property: connectionString
-
-databases:
-  - name: inventory-db
-    databaseName: inventory_management
-    user: inventory_user
-    region: oregon
-    plan: starter
+      - key: SQL_SERVER_HOST
+        value: 163.227.186.23:2499
+      - key: SQL_DATABASE
+        value: InventoryDb
+      - key: SQL_USER
+        sync: false
+      - key: SQL_PASSWORD
+        sync: false
