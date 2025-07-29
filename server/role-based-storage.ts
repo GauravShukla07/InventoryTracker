@@ -95,6 +95,8 @@ import type {
   InsertUser, InsertAsset, InsertTransfer, InsertRepair 
 } from '@shared/schema-new';
 
+import logger from './logger';
+
 export class RoleBasedSqlServerStorage implements IStorage {
   private currentSessionId: string | null = null;
 
@@ -106,9 +108,11 @@ export class RoleBasedSqlServerStorage implements IStorage {
   private async initializeConnections(): Promise<void> {
     try {
       await initializeAuthConnection();
-      console.log('🔧 Two-tier authentication storage initialized');
-    } catch (error) {
-      console.error('❌ Failed to initialize authentication system:', error);
+      logger.info('🔧 Two-tier authentication storage initialized');
+    } catch (error: any) {
+      logger.error('Failed to initialize authentication system:', {
+        error: error.message,
+        stack: error.stack});
     }
   }
 
@@ -131,16 +135,16 @@ export class RoleBasedSqlServerStorage implements IStorage {
    */
   async authenticateAndConnect(emailOrUsername: string, password: string, sessionId: string): Promise<User | null> {
     try {
-      console.log(`🔐 Starting two-tier authentication for: ${emailOrUsername}`);
+      logger.info(`🔐 Starting two-tier authentication for: ${emailOrUsername}`);
       
       // Step 1: Authenticate with john_login connection (read-only Users table access)
       const authResult = await authenticateUser(emailOrUsername, password);
       if (!authResult) {
-        console.log('❌ Authentication failed: Invalid credentials');
+        logger.error('❌ Authentication failed: Invalid credentials');
         return null;
       }
 
-      console.log(`✅ Credentials validated. User: ${authResult.user.username}, Role: ${authResult.user.role}`);
+      logger.info(`✅ Credentials validated. User: ${authResult.user.username}, Role: ${authResult.user.role}`);
       
       // Step 2: Create role-specific connection using extracted credentials
       const userConnection = await createUserConnection(sessionId, authResult.dbUser, authResult.dbPassword);
@@ -151,13 +155,13 @@ export class RoleBasedSqlServerStorage implements IStorage {
       // Step 3: Set current session for subsequent operations
       this.setSessionId(sessionId);
 
-      console.log(`🎯 Role-based connection established. Session: ${sessionId}, Database User: ${authResult.dbUser}`);
-      console.log(`🛡️ Privilege enforcement active for role: ${authResult.user.role}`);
-      
+      logger.info(`🎯 Role-based connection established. Session: ${sessionId}, Database User: ${authResult.dbUser}`);
+      logger.info(`🛡️ Privilege enforcement active for role: ${authResult.user.role}`);
+
       return authResult.user;
 
     } catch (error: any) {
-      console.error('❌ Two-tier authentication failed:', error.message);
+      logger.error('❌ Two-tier authentication failed:', error.message);
       // Cleanup any partial connections
       if (sessionId) {
         await this.disconnectSession(sessionId);
@@ -175,9 +179,9 @@ export class RoleBasedSqlServerStorage implements IStorage {
       if (this.currentSessionId === sessionId) {
         this.currentSessionId = null;
       }
-      console.log(`🔌 Session disconnected: ${sessionId}`);
+      logger.info(`🔌 Session disconnected: ${sessionId}`);
     } catch (error: any) {
-      console.error('❌ Error disconnecting session:', error.message);
+      logger.error('❌ Error disconnecting session:', error.message);
     }
   }
 
@@ -200,7 +204,7 @@ export class RoleBasedSqlServerStorage implements IStorage {
       
       return result.recordset[0] || undefined;
     } catch (error: any) {
-      console.error('❌ Error in getUser:', error.message);
+      logger.error('❌ Error in getUser:', error.message);
       throw new Error(`Failed to get user: ${error.message}`);
     }
   }
@@ -215,7 +219,7 @@ export class RoleBasedSqlServerStorage implements IStorage {
       
       return result.recordset[0] || undefined;
     } catch (error: any) {
-      console.error('❌ Database error in getUserByEmail:', error.message);
+      logger.error('❌ Database error in getUserByEmail:', error.message);
       throw new Error(`Database connection failed: ${error.message}`);
     }
   }
@@ -230,7 +234,7 @@ export class RoleBasedSqlServerStorage implements IStorage {
       
       return result.recordset[0] || undefined;
     } catch (error: any) {
-      console.error('❌ Database error in getUserByUsername:', error.message);
+      logger.error('❌ Database error in getUserByUsername:', error.message);
       throw new Error(`Database connection failed: ${error.message}`);
     }
   }
@@ -249,7 +253,7 @@ export class RoleBasedSqlServerStorage implements IStorage {
       
       return result.recordset || [];
     } catch (error: any) {
-      console.error('❌ Error in getUsers:', error.message);
+      logger.error('❌ Error in getUsers:', error.message);
       // If user doesn't have privileges, SQL Server will deny access
       if (error.message.includes('permission') || error.message.includes('denied')) {
         throw new Error('Insufficient privileges to view users. Admin or Manager role required.');
@@ -289,7 +293,7 @@ export class RoleBasedSqlServerStorage implements IStorage {
       
       return result.recordset[0];
     } catch (error: any) {
-      console.error('❌ Error in createUser:', error.message);
+      logger.error('❌ Error in createUser:', error.message);
       if (error.message.includes('permission') || error.message.includes('denied')) {
         throw new Error('Insufficient privileges to create users. Admin role required.');
       }
@@ -300,19 +304,19 @@ export class RoleBasedSqlServerStorage implements IStorage {
   async updateUser(id: number, updates: Partial<InsertUser>): Promise<User | undefined> {
     // TODO: Implement with role-based connection
     // Requires admin privileges
-    console.log('📋 updateUser - To be implemented (requires admin role)');
+    logger.info('📋 updateUser - To be implemented (requires admin role)');
     return undefined;
   }
 
   async deleteUser(id: number): Promise<void> {
     // TODO: Implement with role-based connection
     // Requires admin privileges
-    console.log('📋 deleteUser - To be implemented (requires admin role)');
+    logger.info('📋 deleteUser - To be implemented (requires admin role)');
   }
 
   async updateUserLastLogin(id: number): Promise<void> {
     // Skip - column doesn't exist in current database schema
-    console.log('⚠️ Skipping lastLogin update - column not available in database');
+    logger.warn('⚠️ Skipping lastLogin update - column not available in database');
     return;
   }
 
@@ -334,7 +338,7 @@ export class RoleBasedSqlServerStorage implements IStorage {
       
       return result.recordset || [];
     } catch (error: any) {
-      console.error('❌ Error in getAssets:', error.message);
+      logger.error('❌ Error in getAssets:', error.message);
       throw new Error(`Failed to get assets: ${error.message}`);
     }
   }
@@ -342,28 +346,28 @@ export class RoleBasedSqlServerStorage implements IStorage {
   async getAsset(id: number): Promise<Asset | undefined> {
     // TODO: Implement with role-based connection
     // All roles can view individual assets
-    console.log('📋 getAsset - To be implemented (all roles)');
+    logger.info('📋 getAsset - To be implemented (all roles)');
     return undefined;
   }
 
   async createAsset(assetData: InsertAsset): Promise<Asset> {
     // TODO: Implement with role-based connection
     // Requires operator/manager/admin privileges
-    console.log('📋 createAsset - To be implemented (requires operator+ role)');
+    logger.info('📋 createAsset - To be implemented (requires operator+ role)');
     throw new Error('Not implemented - requires operator+ privileges');
   }
 
   async updateAsset(id: number, updates: Partial<InsertAsset>): Promise<Asset | undefined> {
     // TODO: Implement with role-based connection
     // Requires operator/manager/admin privileges
-    console.log('📋 updateAsset - To be implemented (requires operator+ role)');
+    logger.info('📋 updateAsset - To be implemented (requires operator+ role)');
     return undefined;
   }
 
   async deleteAsset(id: number): Promise<void> {
     // TODO: Implement with role-based connection
     // Requires admin privileges
-    console.log('📋 deleteAsset - To be implemented (requires admin role)');
+    logger.info('📋 deleteAsset - To be implemented (requires admin role)');
   }
 
   // =============================================================================
@@ -373,38 +377,38 @@ export class RoleBasedSqlServerStorage implements IStorage {
   async getTransfers(): Promise<Transfer[]> {
     // TODO: Implement with role-based connection
     // All roles can view transfers
-    console.log('📋 getTransfers - To be implemented (all roles)');
+    logger.info('📋 getTransfers - To be implemented (all roles)');
     return [];
   }
 
   async getTransfer?(id: number): Promise<Transfer | undefined> {
     // TODO: Implement with role-based connection
-    console.log('📋 getTransfer - To be implemented (all roles)');
+    logger.info('📋 getTransfer - To be implemented (all roles)');
     return undefined;
   }
 
   async getTransfersByAsset?(assetId: number): Promise<Transfer[]> {
     // TODO: Implement with role-based connection
-    console.log('📋 getTransfersByAsset - To be implemented (all roles)');
+    logger.info('📋 getTransfersByAsset - To be implemented (all roles)');
     return [];
   }
 
   async createTransfer(transferData: InsertTransfer): Promise<Transfer> {
     // TODO: Implement with role-based connection
     // Requires operator/manager/admin privileges
-    console.log('📋 createTransfer - To be implemented (requires operator+ role)');
+    logger.info('📋 createTransfer - To be implemented (requires operator+ role)');
     throw new Error('Not implemented - requires operator+ privileges');
   }
 
   async updateTransfer?(id: number, updates: Partial<InsertTransfer>): Promise<Transfer | undefined> {
     // TODO: Implement with role-based connection
-    console.log('📋 updateTransfer - To be implemented (requires manager+ role)');
+    logger.info('📋 updateTransfer - To be implemented (requires manager+ role)');
     return undefined;
   }
 
   async deleteTransfer?(id: number): Promise<boolean> {
     // TODO: Implement with role-based connection
-    console.log('📋 deleteTransfer - To be implemented (requires admin role)');
+    logger.info('📋 deleteTransfer - To be implemented (requires admin role)');
     return false;
   }
 
@@ -415,44 +419,44 @@ export class RoleBasedSqlServerStorage implements IStorage {
   async getRepairs(): Promise<Repair[]> {
     // TODO: Implement with role-based connection
     // All roles can view repairs
-    console.log('📋 getRepairs - To be implemented (all roles)');
+    logger.info('📋 getRepairs - To be implemented (all roles)');
     return [];
   }
 
   async getRepair?(id: number): Promise<Repair | undefined> {
     // TODO: Implement with role-based connection
-    console.log('📋 getRepair - To be implemented (all roles)');
+    logger.info('📋 getRepair - To be implemented (all roles)');
     return undefined;
   }
 
   async getRepairsByAsset?(assetId: number): Promise<Repair[]> {
     // TODO: Implement with role-based connection
-    console.log('📋 getRepairsByAsset - To be implemented (all roles)');
+    logger.info('📋 getRepairsByAsset - To be implemented (all roles)');
     return [];
   }
 
   async createRepair(repairData: InsertRepair): Promise<Repair> {
     // TODO: Implement with role-based connection
     // Requires operator/manager/admin privileges
-    console.log('📋 createRepair - To be implemented (requires operator+ role)');
+    logger.info('📋 createRepair - To be implemented (requires operator+ role)');
     throw new Error('Not implemented - requires operator+ privileges');
   }
 
   async updateRepair(id: number, updates: Partial<InsertRepair>): Promise<Repair | undefined> {
     // TODO: Implement with role-based connection
-    console.log('📋 updateRepair - To be implemented (requires operator+ role)');
+    logger.info('📋 updateRepair - To be implemented (requires operator+ role)');
     return undefined;
   }
 
   async deleteRepair?(id: number): Promise<boolean> {
     // TODO: Implement with role-based connection
-    console.log('📋 deleteRepair - To be implemented (requires admin role)');
+    logger.info('📋 deleteRepair - To be implemented (requires admin role)');
     return false;
   }
 
   async getActiveRepairs(): Promise<Repair[]> {
     // TODO: Implement with role-based connection
-    console.log('📋 getActiveRepairs - To be implemented (all roles)');
+    logger.info('📋 getActiveRepairs - To be implemented (all roles)');
     return [];
   }
 
@@ -470,7 +474,7 @@ export class RoleBasedSqlServerStorage implements IStorage {
       // Registration enabled if no admin users exist
       return result.recordset[0].userCount === 0;
     } catch (error: any) {
-      console.error('❌ Database error checking registration status:', error.message);
+      logger.error('❌ Database error checking registration status:', error.message);
       throw new Error(`Database connection failed: ${error.message}`);
     }
   }

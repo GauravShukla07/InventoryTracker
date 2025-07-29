@@ -18,6 +18,7 @@
  */
 
 import sql from 'mssql'; // Microsoft SQL Server driver for Node.js
+import logger from './logger.js';
 
 // Base server connection configuration for SQL Server at 163.227.186.23:2499
 
@@ -53,19 +54,21 @@ function createAuthUserConfig(): sql.config {
     password: process.env.SQL_PASSWORD || '',      // Authentication password from environment
   };
   
-  // console.log('🔧 Creating AUTH_USER_CONFIG with values:');
-  // console.log('  server:', config.server);
-  // console.log('  database:', config.database);
-  // console.log('  port:', config.port);
-  // console.log('  user:', config.user);
-  // console.log('  password:', config.password ? '[SET]' : '[NOT SET]');
-  console.log('🔧 Auth connection config:', config);
+  // logger.debug('🔧 Creating AUTH_USER_CONFIG with values:', {
+  //   server: config.server,
+  //   database: config.database,
+  //   port: config.port,
+  //   user: config.user,
+  //   password: config.password ? '[SET]' : '[NOT SET]'
+  // });
+  logger.info('🔧 Auth connection config:', config);
   return config as sql.config;
 }
 
 // Global connection state management
 const sessionConnections = new Map<string, sql.ConnectionPool>();     // Maps session IDs to role-specific connections
 let authConnection: sql.ConnectionPool | null = null;                 // Singleton authentication connection
+
 
 /**
  * Initialize the authentication connection using john_login_user
@@ -74,6 +77,7 @@ let authConnection: sql.ConnectionPool | null = null;                 // Singlet
  * 
  * @returns Promise<sql.ConnectionPool | null> - Authentication connection or null on failure
  */
+
 export async function initializeAuthConnection(): Promise<sql.ConnectionPool | null> {
   try {
     // Return existing connection if available and connected
@@ -81,7 +85,7 @@ export async function initializeAuthConnection(): Promise<sql.ConnectionPool | n
       return authConnection;
     }
 
-    console.log('🔧 Initializing authentication connection as john_login_user...');
+    logger.info('🔧 Initializing authentication connection as john_login_user...');
     
     // Create config dynamically to ensure environment variables are loaded
     const authUserConfig = createAuthUserConfig();
@@ -90,11 +94,14 @@ export async function initializeAuthConnection(): Promise<sql.ConnectionPool | n
     authConnection = new sql.ConnectionPool(authUserConfig);
     await authConnection.connect();  // Establish connection to SQL Server
     
-    console.log('✅ Authentication connection established');
+    logger.info('✅ Authentication connection established');
     return authConnection;
     
   } catch (error: any) {
-    console.error('❌ Failed to initialize authentication connection:', error.message);
+    logger.error('❌ Failed to initialize authentication connection:', { 
+      error: error.message,
+      stack: error.stack 
+    });
     authConnection = null;  // Reset connection on failure
     return null;
   }
@@ -113,9 +120,8 @@ export async function authenticateUser(emailOrUsername: string, password: string
     if (!connection) {
       throw new Error('Authentication connection not available');
     }
+    logger.info(`🔍 Authenticating user: ${emailOrUsername}`);
 
-    console.log(`🔍 Authenticating user: ${emailOrUsername}`);
-    
     // Query Users table with john's read-only access
     // Extract role (UID) and rolePassword (PWD) from Users table
     const result = await connection.request()
@@ -131,21 +137,23 @@ export async function authenticateUser(emailOrUsername: string, password: string
       `); // FullName as department optional, currently not used in this database
 
     if (result.recordset.length === 0) {
-      console.log('❌ Authentication failed: Invalid credentials or inactive user');
+      logger.warn('❌ Authentication failed: Invalid credentials or inactive user', { 
+        emailOrUsername 
+      });
       return null;
     }
 
     const user = result.recordset[0];
-    console.log(`✅ User authenticated: ${user.username} (role: ${user.role})`);
+    logger.info(`✅ User authenticated: ${user.username} (role: ${user.role})`);
     
     // Update last login timestamp (optional - skip if column doesn't exist)
     try {
       await connection.request()
         .input('userId', sql.Int, user.id)
         .input('lastLogin', sql.DateTime, new Date())
-        .query('UPDATE users SET lastLogin = @lastLogin WHERE id = @userId');
+        .query('UPDATE users SET lastLogin = @lastLogin WHERE UserID = @userId');
     } catch (updateError) {
-      console.log('⚠️ Could not update lastLogin (column may not exist)');
+      logger.warn('⚠️ Could not update lastLogin (column may not exist)');
     }
 
     return {
@@ -163,7 +171,7 @@ export async function authenticateUser(emailOrUsername: string, password: string
     };
 
   } catch (error: any) {
-    console.error('❌ Authentication error:', error.message);
+    logger.error('❌ Authentication error:', error.message);
     return null;
   }
 }

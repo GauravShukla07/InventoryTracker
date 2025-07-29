@@ -4,15 +4,18 @@ import MemoryStore from "memorystore";
 import { createServer } from "http";
 import router from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
+import logger from "./logger.js";
 
 // Load environment variables
 import dotenv from 'dotenv';
 dotenv.config();
 
 // Log environment variables for debugging
-console.log('🔍 Environment check:');
-console.log('SQL_SERVER:', process.env.SQL_SERVER);
-console.log('NODE_ENV:', process.env.NODE_ENV);
+logger.info('🔍 Environment check:', {
+  SQL_SERVER: process.env.SQL_SERVER,
+  NODE_ENV: process.env.NODE_ENV,
+  PORT: process.env.PORT
+});
 
 // Extend session data interface
 declare module 'express-session' {
@@ -133,13 +136,16 @@ app.use((req, res, next) => {
   // setting up all the other routes so the catch-all route
   // doesn't interfere with the other routes
   const nodeEnv = (process.env.NODE_ENV || app.get("env")).trim().toLowerCase();
-  console.log(`🔍 Detected environment: "${nodeEnv}" (NODE_ENV: "${process.env.NODE_ENV}", app.env: "${app.get("env")}")`);
+  logger.info(`🔍 Detected environment: "${nodeEnv}"`, { 
+    NODE_ENV: process.env.NODE_ENV, 
+    app_env: app.get("env") 
+  });
   
   if (nodeEnv === "development") {
-    console.log('✅ Starting in DEVELOPMENT mode - using Vite dev server');
+    logger.info('✅ Starting in DEVELOPMENT mode - using Vite dev server');
     await setupVite(app, server);
   } else {
-    console.log('✅ Starting in PRODUCTION mode - serving static files');
+    logger.info('✅ Starting in PRODUCTION mode - serving static files');
     serveStatic(app);
   }
 
