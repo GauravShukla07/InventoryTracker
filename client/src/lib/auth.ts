@@ -27,8 +27,9 @@ export const authApi = {
 
   logout: async (): Promise<void> => {
     await apiRequest("/api/auth/logout", { method: "POST" });
-    // Clear token from localStorage
+    // Clear both token and session ID from localStorage
     localStorage.removeItem('authToken');
+    localStorage.removeItem('sessionId');
   },
 
   me: async (): Promise<{ user: User }> => {

@@ -1,11 +1,92 @@
 import { Router, Request, Response } from 'express';
 import { RoleBasedSqlServerStorage } from './role-based-storage';
+import { 
+  getConnectionStatus, 
+  getDefaultConnection, 
+  closeSessionConnection 
+} from './connection-manager.js';
+import logger from '@shared/logger';
+
 
 export interface AuthenticatedRequest extends Request {
   sessionId?: string;
 }
 
 const router = Router();
+
+// **NEW: Connection status endpoint for utility pages**
+router.get('/database/connections', (req: Request, res: Response) => {
+  try {
+    const status = getConnectionStatus();
+    logger.info("📊 Connection status requested");
+    
+    res.json({
+      success: true,
+      timestamp: new Date().toISOString(),
+      connections: {
+        default: {
+          established: status.defaultConnection.established,
+          user: status.defaultConnection.user,
+          database: status.defaultConnection.database,
+          server: status.defaultConnection.server,
+          purpose: 'Authentication and initial queries'
+        },
+        activeSessions: status.activeSessions,
+        sessions: status.sessionList.map(session => ({
+          sessionId: session.sessionId.substring(0, 8) + '...', // **Truncate for security**
+          user: session.user,
+          established: session.established,
+          purpose: 'Role-based operations'
+        }))
+      }
+    });
+  } catch (error: any) {
+    logger.error('❌ Error getting connection status:', error.message);
+    res.status(500).json({ 
+      success: false, 
+      message: 'Failed to get connection status',
+      error: error.message
+    });
+  }
+});
+
+// **Enhanced: Test default connection endpoint**
+router.post('/database/test-default', async (req: Request, res: Response) => {
+  try {
+    const connection = getDefaultConnection();
+    
+    if (!connection) {
+      return res.status(503).json({
+        success: false,
+        message: 'Default SQL connection not available',
+        suggestion: 'Server may need restart to establish connection'
+      });
+    }
+    
+    // **Test query**
+    const result = await connection.request().query('SELECT 1 as test, GETDATE() as timestamp');
+    
+    res.json({
+      success: true,
+      message: 'Default connection is working',
+      data: result.recordset[0],
+      connectionDetails: {
+        user: process.env.SQL_USER,
+        database: process.env.SQL_DATABASE,
+        server: process.env.SQL_SERVER_HOST
+      }
+    });
+      
+  } catch (error: any) {
+    logger.error('❌ Default connection test failed:', error.message);
+    res.status(500).json({ 
+      success: false, 
+      message: 'Connection test failed',
+      error: error.message
+    });
+  }
+});
+
 
 // Health check endpoint for deployment platforms
 router.get('/health', (req: Request, res: Response) => {
@@ -19,6 +100,7 @@ router.get('/health', (req: Request, res: Response) => {
 
 // Session tracking for authentication
 const activeSessions = new Set<string>();
+const sessionUsers = new Map<string, { userId: number; username: string; role: string }>();
 
 // Simple session ID generator
 function generateSessionId(): string {
@@ -45,15 +127,28 @@ const requireAuth = (req: AuthenticatedRequest, res: Response, next: Function) =
 // Note: Frontend expects /api/auth/* endpoints, so we add both /auth/* and legacy /login
 
 // New auth routes (expected by frontend)
+// **Enhanced login to use cached default connection**
 router.post('/auth/login', async (req: Request, res: Response) => {
   try {
-    const { email, password } = req.body; // Frontend sends 'email' field (can be username or email)
+    const { email, password } = req.body;
     
     if (!email || !password) {
       return res.status(400).json({ message: 'Email/username and password are required' });
     }
 
-    // Generate session ID and token
+    // **Check if default connection is available**
+    const defaultConnection = getDefaultConnection();
+    if (!defaultConnection) {
+      logger.error('❌ Default connection not available for login');
+      return res.status(503).json({ 
+        message: 'Database connection not available. Please try again later.' 
+      });
+    }
+
+    logger.info('🔐 Login attempt using cached default connection', { 
+      email: email 
+    });
+
     const sessionId = generateSessionId();
     const token = `token_${Date.now()}_${Math.random().toString(36)}`;
     
@@ -62,24 +157,80 @@ router.post('/auth/login', async (req: Request, res: Response) => {
     
     if (user) {
       activeSessions.add(sessionId);
+      
+      // Store user info with session for /auth/me endpoint
+      sessionUsers.set(sessionId, {
+        userId: user.id,
+        username: user.username,
+        role: user.role
+      });
+      
+      // **Store session info**
+      req.session.sessionId = sessionId;
+      req.session.userId = user.id;
+      
+      logger.info('✅ Login successful, role-based connection established', {
+        user: user.username,
+        role: user.role,
+        sessionId: sessionId.substring(0, 8) + '...'
+      });
+      
       res.json({
         user: {
           id: user.id,
           username: user.username,
           email: user.email,
+          role: user.role,
           lastLogin: user.lastLogin,
           createdAt: user.createdAt
         },
+        sessionId: sessionId,
         token: token
       });
     } else {
+      logger.warn('❌ Login failed: Invalid credentials', { 
+        email: email.substring(0, 3) + '***' 
+      });
       res.status(401).json({ message: 'Invalid credentials' });
     }
-  } catch (error) {
-    console.error('Login error:', error);
+  } catch (error: any) {
+    logger.error('❌ Login error:', error.message);
     res.status(500).json({ message: 'Internal server error' });
   }
 });
+
+// **Enhanced logout to properly manage connections**
+router.post('/auth/logout', async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const sessionId = req.headers['x-session-id'] as string || req.session.sessionId;
+    
+    if (sessionId) {
+      activeSessions.delete(sessionId);
+      sessionUsers.delete(sessionId); // Clean up user session data
+      
+      // **Close role-based connection, keep default connection**
+      await closeSessionConnection(sessionId);
+      
+      // **Clear session data**
+      req.session.destroy((err) => {
+        if (err) {
+          logger.error('❌ Session destruction error:', err);
+        }
+      });
+      
+      logger.info('🔌 User logged out, role-based connection closed', { 
+        sessionId: sessionId.substring(0, 8) + '...' 
+      });
+      logger.info('🔗 Default connection remains active for new logins');
+    }
+    
+    res.json({ message: 'Logged out successfully' });
+  } catch (error: any) {
+    logger.error('❌ Logout error:', error.message);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
 
 router.post('/auth/register', async (req: Request, res: Response) => {
   try {
@@ -100,10 +251,48 @@ router.post('/auth/register', async (req: Request, res: Response) => {
 router.get('/auth/me', requireAuth, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const sessionId = req.sessionId!;
-    // TODO: Get current user from session
-    res.status(501).json({ message: 'Me endpoint not yet implemented' });
-  } catch (error) {
-    console.error('Me endpoint error:', error);
+    logger.info('🔍 /auth/me endpoint called', { sessionId: sessionId.substring(0, 8) + '...' });
+    
+    // Get user info stored with the session
+    const userInfo = sessionUsers.get(sessionId);
+    if (!userInfo) {
+      logger.warn('❌ No user info found for session', { sessionId: sessionId.substring(0, 8) + '...' });
+      return res.status(401).json({ error: 'Session expired or invalid' });
+    }
+    
+    // Get full user data from storage
+    const storage = new RoleBasedSqlServerStorage();
+    storage.setSessionId(sessionId);
+    
+    try {
+      const user = await storage.getUser(userInfo.userId);
+      if (!user) {
+        logger.warn('❌ User not found in database', { userId: userInfo.userId });
+        return res.status(401).json({ error: 'User not found' });
+      }
+      
+      logger.info('✅ /auth/me successful', { 
+        userId: user.id, 
+        username: user.username, 
+        role: user.role 
+      });
+      
+      res.json({
+        user: {
+          id: user.id,
+          username: user.username,
+          email: user.email,
+          role: user.role,
+          lastLogin: user.lastLogin || null,
+          createdAt: user.createdAt
+        }
+      });
+    } catch (dbError: any) {
+      logger.error('❌ Database error in /auth/me:', { error: dbError.message });
+      res.status(500).json({ error: 'Database error' });
+    }
+  } catch (error: any) {
+    logger.error('❌ /auth/me endpoint error:', { error: error.message });
     res.status(500).json({ message: 'Internal server error' });
   }
 });
@@ -112,74 +301,7 @@ router.get('/auth/registration-status', (req: Request, res: Response) => {
   res.json({ registrationEnabled: true });
 });
 
-router.post('/auth/logout', (req: AuthenticatedRequest, res: Response) => {
-  try {
-    const sessionId = req.headers['x-session-id'] as string;
-    
-    if (sessionId) {
-      activeSessions.delete(sessionId);
-      const storage = new RoleBasedSqlServerStorage();
-      storage.disconnectSession(sessionId);
-    }
-    
-    res.json({ message: 'Logged out successfully' });
-  } catch (error) {
-    console.error('Logout error:', error);
-    res.status(500).json({ message: 'Internal server error' });
-  }
-});
 
-// Legacy routes (for backward compatibility)
-router.post('/login', async (req: Request, res: Response) => {
-  try {
-    const { username, password } = req.body;
-    
-    if (!username || !password) {
-      return res.status(400).json({ error: 'Username and password are required' });
-    }
-
-    // Generate session ID
-    const sessionId = generateSessionId();
-    
-    const storage = new RoleBasedSqlServerStorage();
-    const user = await storage.authenticateAndConnect(username, password, sessionId);
-    
-    if (user) {
-      activeSessions.add(sessionId);
-      res.json({
-        success: true,
-        sessionId: sessionId,
-        user: {
-          id: user.id,
-          username: user.username,
-          role: user.role
-        }
-      });
-    } else {
-      res.status(401).json({ error: 'Invalid username or password' });
-    }
-  } catch (error) {
-    console.error('Login error:', error);
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
-
-router.post('/logout', (req: AuthenticatedRequest, res: Response) => {
-  try {
-    const sessionId = req.headers['x-session-id'] as string;
-    
-    if (sessionId) {
-      activeSessions.delete(sessionId);
-      const storage = new RoleBasedSqlServerStorage();
-      storage.disconnectSession(sessionId);
-    }
-    
-    res.json({ success: true, message: 'Logged out successfully' });
-  } catch (error) {
-    console.error('Logout error:', error);
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
 
 // PHASE 2: Asset Management Routes
 router.get('/assets', requireAuth, async (req: AuthenticatedRequest, res: Response) => {

@@ -2,10 +2,16 @@ import winston from 'winston';
 import path from 'path';
 import fs from 'fs';
 
-// Create logs directory if it doesn't exist
-const logsDir = path.join(process.cwd(), 'logs');
-if (!fs.existsSync(logsDir)) {
-  fs.mkdirSync(logsDir, { recursive: true });
+// Environment check - only create file system logs on server
+const isServer = typeof window === 'undefined' && typeof process !== 'undefined';
+
+// Create logs directory if it doesn't exist (server only)
+let logsDir: string = '';
+if (isServer) {
+  logsDir = path.join(process.cwd(), 'logs');
+  if (!fs.existsSync(logsDir)) {
+    fs.mkdirSync(logsDir, { recursive: true });
+  }
 }
 
 // Custom format for beautiful console output
@@ -119,29 +125,30 @@ const logger = winston.createLogger({
   ),
   defaultMeta: { service: 'inventory-tracker' },
   transports: [
-    // Write all logs with importance level of `error` or less to `error.log`
-    new winston.transports.File({ 
-      filename: path.join(logsDir, 'error.log'), 
-      level: 'error',
-      maxsize: 5242880, // 5MB
-      maxFiles: 5,
-      format: fileFormat
-    }),
-    // Write all logs with importance level of `info` or less to `combined.log`
-    new winston.transports.File({ 
-      filename: path.join(logsDir, 'combined.log'),
-      maxsize: 5242880, // 5MB
-      maxFiles: 5,
-      format: fileFormat
-    }),
+    // Only add file transports on server
+    ...(isServer ? [
+      // Write all logs with importance level of `error` or less to `error.log`
+      new winston.transports.File({ 
+        filename: path.join(logsDir, 'error.log'), 
+        level: 'error',
+        maxsize: 5242880, // 5MB
+        maxFiles: 5,
+        format: fileFormat
+      }),
+      // Write all logs with importance level of `info` or less to `combined.log`
+      new winston.transports.File({ 
+        filename: path.join(logsDir, 'combined.log'),
+        maxsize: 5242880, // 5MB
+        maxFiles: 5,
+        format: fileFormat
+      })
+    ] : []),
   ],
 });
 
-// Add beautiful console output for development
-if (process.env.NODE_ENV !== 'production') {
-  logger.add(new winston.transports.Console({
-    format: consoleFormat
-  }));
-}
+// Add console output (works on both client and server)
+logger.add(new winston.transports.Console({
+  format: consoleFormat
+}));
 
 export default logger;

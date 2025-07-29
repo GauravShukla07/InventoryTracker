@@ -1,32 +1,17 @@
-/**
- * FILE ROLE: SQL Server Connection Manager for Two-Tier Authentication
- * 
- * FUNCTIONS:
- * - Manages SQL Server connection pooling for authentication and role-based access
- * - Handles two-tier authentication: john_login_user → role-specific user
- * - Validates user credentials against Users table with minimal privileges
- * - Extracts role and rolePassword from Users table for dynamic connection switching
- * - Provides session-based connection management with proper cleanup
- * - Implements enterprise security patterns with connection isolation
- * 
- * KEY METHODS:
- * - initializeAuthConnection(): Establishes john_login_user connection
- * - authenticateUser(): Validates credentials and extracts role info
- * - createRoleConnection(): Creates connection with role-specific credentials
- * - getSessionConnection(): Retrieves existing session connections
- * - closeSessionConnection(): Cleanup for session termination
- */
+import sql from 'mssql';
+import logger from '@shared/logger';
 
-import sql from 'mssql'; // Microsoft SQL Server driver for Node.js
-import logger from './logger.js';
-
-// Base server connection configuration for SQL Server at 163.227.186.23:2499
+// Enhanced connection state management
+const sessionConnections = new Map<string, sql.ConnectionPool>();
+const sessionUsers = new Map<string, string>(); // **NEW: Track which user each session belongs to**
+let defaultConnection: sql.ConnectionPool | null = null;
+let authConnection: sql.ConnectionPool | null = null;
 
 function createServerConfig(): sql.config {
   const config = {
     server: process.env.SQL_SERVER_HOST,          // Windows SQL Server IP address
     database: process.env.SQL_DATABASE ,           // Target database name (FIXED: removed 'USE ')
-    port: parseInt(process.env.SQL_PORT || ''),                        // SQL Server port (non-standard for security)
+    port: process.env.SQL_PORT ? parseInt(process.env.SQL_PORT) : 1433,                        // SQL Server port (non-standard for security)
     options: {
       encrypt: process.env.SQL_ENCRYPT === 'true' ? true : false,                  // Disable encryption for internal network
       trustServerCertificate: process.env.SQL_TRUST_CERT === 'true' ? true : true,    // Trust self-signed certificates
@@ -45,70 +30,126 @@ function createServerConfig(): sql.config {
   return config as sql.config;
 };
 
-// Authentication user configuration (john_login_user with read-only access to Users table)
-// Create this dynamically to ensure environment variables are properly loaded
 function createAuthUserConfig(): sql.config {
-  const config = {
-    ...createServerConfig(),                                                    // Inherit base server config
+  return {
+    ...createServerConfig(),
     user: process.env.SQL_USER || '',               // Low-privilege authentication user
     password: process.env.SQL_PASSWORD || '',      // Authentication password from environment
-  };
-  
-  // logger.debug('🔧 Creating AUTH_USER_CONFIG with values:', {
-  //   server: config.server,
-  //   database: config.database,
-  //   port: config.port,
-  //   user: config.user,
-  //   password: config.password ? '[SET]' : '[NOT SET]'
-  // });
-  logger.info('🔧 Auth connection config:', config);
-  return config as sql.config;
+  } as sql.config;
 }
 
-// Global connection state management
-const sessionConnections = new Map<string, sql.ConnectionPool>();     // Maps session IDs to role-specific connections
-let authConnection: sql.ConnectionPool | null = null;                 // Singleton authentication connection
-
-
 /**
- * Initialize the authentication connection using john_login_user
- * This connection provides read-only access to Users table for credential validation
- * Returns existing connection if already established, creates new one if needed
- * 
- * @returns Promise<sql.ConnectionPool | null> - Authentication connection or null on failure
+ * **NEW: Initialize default connection on server startup**
+ * This replaces the on-demand auth connection approach
  */
-
-export async function initializeAuthConnection(): Promise<sql.ConnectionPool | null> {
+export async function initializeDefaultConnection(): Promise<sql.ConnectionPool | null> {
   try {
-    // Return existing connection if available and connected
-    if (authConnection && authConnection.connected) {
-      return authConnection;
+    // Return existing if already connected
+    if (defaultConnection && defaultConnection.connected) {
+      logger.info('✅ Default connection already established');
+      return defaultConnection;
     }
 
-    logger.info('🔧 Initializing authentication connection as john_login_user...');
+    logger.info('🔧 Establishing default SQL connection...');
+    logger.info('📋 Connection details:', {
+      server: process.env.SQL_SERVER_HOST,
+      database: process.env.SQL_DATABASE,
+      user: process.env.SQL_USER,
+      port: process.env.SQL_PORT || 1433,
+      instance: process.env.SQL_INSTANCE || 'default'
+    });
     
-    // Create config dynamically to ensure environment variables are loaded
-    const authUserConfig = createAuthUserConfig();
+    const defaultConfig = createAuthUserConfig();
+    defaultConnection = new sql.ConnectionPool(defaultConfig);
+    await defaultConnection.connect();
     
-    // Create new connection pool with authentication user credentials
-    authConnection = new sql.ConnectionPool(authUserConfig);
-    await authConnection.connect();  // Establish connection to SQL Server
+    // **Test the connection**
+    const testResult = await defaultConnection.request().query('SELECT 1 as test, GETDATE() as timestamp');
     
-    logger.info('✅ Authentication connection established');
-    return authConnection;
+    logger.info('✅ Default SQL connection established successfully', {
+      user: process.env.SQL_USER,
+      database: process.env.SQL_DATABASE,
+      server: process.env.SQL_SERVER_HOST,
+      testResult: testResult.recordset[0]
+    });
+    
+    // **Also set as auth connection for backwards compatibility**
+    authConnection = defaultConnection;
+    
+    return defaultConnection;
     
   } catch (error: any) {
-    logger.error('❌ Failed to initialize authentication connection:', { 
+    logger.error('❌ Failed to establish default SQL connection:', {
       error: error.message,
-      stack: error.stack 
+      server: process.env.SQL_SERVER_HOST,
+      user: process.env.SQL_USER,
+      database: process.env.SQL_DATABASE,
+      stack: error.stack
     });
-    authConnection = null;  // Reset connection on failure
+    defaultConnection = null;
+    authConnection = null;
     return null;
   }
 }
 
 /**
- * Authenticate user and get their role/database user mapping
+ * **Enhanced: Get comprehensive connection status**
+ */
+export function getConnectionStatus(): {
+  defaultConnection: {
+    established: boolean;
+    user: string;
+    database: string;
+    server: string;
+    connectedAt?: Date;
+  };
+  activeSessions: number;
+  sessionList: Array<{
+    sessionId: string;
+    user: string;
+    established: boolean;
+    connectedAt?: Date;
+  }>;
+} {
+  // **FIXED: Use tracked user information instead of accessing connection.config**
+  const sessionDetails = Array.from(sessionConnections.entries()).map(([sessionId, connection]) => {
+    return {
+      sessionId,
+      user: sessionUsers.get(sessionId) || 'unknown', // **Get user from our tracking map**
+      established: connection.connected,
+      connectedAt: new Date() // **TODO: Track actual connection time**
+    };
+  });
+
+  return {
+    defaultConnection: {
+      established: !!(defaultConnection && defaultConnection.connected),
+      user: process.env.SQL_USER || 'not-set',
+      database: process.env.SQL_DATABASE || 'not-set',
+      server: process.env.SQL_SERVER_HOST || 'not-set',
+      connectedAt: defaultConnection ? new Date() : undefined
+    },
+    activeSessions: sessionConnections.size,
+    sessionList: sessionDetails
+  };
+}
+
+/**
+ * **NEW: Get default connection (replaces getAuthConnection)**
+ */
+export function getDefaultConnection(): sql.ConnectionPool | null {
+  return (defaultConnection && defaultConnection.connected) ? defaultConnection : null;
+}
+
+/**
+ * **Keep for backwards compatibility**
+ */
+export function getAuthConnection(): sql.ConnectionPool | null {
+  return getDefaultConnection();
+}
+
+/**
+ * **Enhanced: Authenticate using cached default connection**
  */
 export async function authenticateUser(emailOrUsername: string, password: string): Promise<{
   user: any;
@@ -116,45 +157,34 @@ export async function authenticateUser(emailOrUsername: string, password: string
   dbPassword: string;
 } | null> {
   try {
-    const connection = await initializeAuthConnection();
+    // **Use cached default connection instead of creating new one**
+    const connection = getDefaultConnection();
     if (!connection) {
-      throw new Error('Authentication connection not available');
+      throw new Error('Default SQL connection not available. Server may need restart.');
     }
-    logger.info(`🔍 Authenticating user: ${emailOrUsername}`);
+    
+    logger.info(`🔍 Authenticating user: ${emailOrUsername} using cached connection`);
 
-    // Query Users table with john's read-only access
-    // Extract role (UID) and rolePassword (PWD) from Users table
+    // **Rest of authentication logic remains the same**
     const result = await connection.request()
       .input('emailOrUsername', sql.VarChar, emailOrUsername)
-      .input('password', sql.VarChar, password) // TODO: In production, hash the password before comparison
+      .input('password', sql.VarChar, password)
       .query(`
         SELECT 
           UserID as id, Username as username, Email as email, Role as role, rolePassword, IsActive as isActive
         FROM users 
         WHERE (Email = @emailOrUsername OR Username = @emailOrUsername) 
-        AND PasswordHash = @password -- TODO: Change to PasswordHash when implementing proper hashing
+        AND PasswordHash = @password
         AND IsActive = 1
-      `); // FullName as department optional, currently not used in this database
+      `);
 
     if (result.recordset.length === 0) {
-      logger.warn('❌ Authentication failed: Invalid credentials or inactive user', { 
-        emailOrUsername 
-      });
+      logger.warn('❌ Authentication failed: Invalid credentials', { emailOrUsername });
       return null;
     }
 
     const user = result.recordset[0];
-    logger.info(`✅ User authenticated: ${user.username} (role: ${user.role})`);
-    
-    // Update last login timestamp (optional - skip if column doesn't exist)
-    try {
-      await connection.request()
-        .input('userId', sql.Int, user.id)
-        .input('lastLogin', sql.DateTime, new Date())
-        .query('UPDATE users SET lastLogin = @lastLogin WHERE UserID = @userId');
-    } catch (updateError) {
-      logger.warn('⚠️ Could not update lastLogin (column may not exist)');
-    }
+    logger.info(`✅ User authenticated via cached connection: ${user.username} (role: ${user.role})`);
 
     return {
       user: {
@@ -162,29 +192,32 @@ export async function authenticateUser(emailOrUsername: string, password: string
         username: user.username,
         email: user.email,
         role: user.role,
-        // department: user.department, // Optional, not used in this database
-        isActive: user.isActive, // Use actual IsActive value from database
-        lastLogin: null // Column not available in this database
+        isActive: user.isActive,
+        lastLogin: null
       },
-      dbUser: user.role, // UID = role column value
-      dbPassword: user.rolePassword // PWD = rolePassword column value
+      dbUser: user.role,
+      dbPassword: user.rolePassword
     };
 
   } catch (error: any) {
-    logger.error('❌ Authentication error:', error.message);
+    logger.error('❌ Authentication error:', {
+      error: error.message,
+      emailOrUsername,
+      stack: error.stack
+    });
     return null;
   }
 }
 
 /**
- * Create role-based connection for authenticated user
+ * **Enhanced: Create role-based connection and track user info**
  */
 export async function createUserConnection(sessionId: string, dbUser: string, dbPassword: string): Promise<sql.ConnectionPool | null> {
   try {
-    // Close existing connection for this session
+    // **Close existing session connection if exists**
     await closeSessionConnection(sessionId);
 
-    console.log(`🔄 Creating connection for user: ${dbUser}`);
+    logger.info(`🔄 Creating role-based connection for user: ${dbUser}, session: ${sessionId.substring(0, 8)}...`);
     
     const userConfig: sql.config = {
       ...createServerConfig(),
@@ -195,20 +228,34 @@ export async function createUserConnection(sessionId: string, dbUser: string, db
     const connection = new sql.ConnectionPool(userConfig);
     await connection.connect();
     
-    // Store connection for this session
-    sessionConnections.set(sessionId, connection);
+    // **Test the role-based connection**
+    await connection.request().query('SELECT 1 as test');
     
-    console.log(`✅ User connection established for: ${dbUser}`);
+    // **Store connection and user info for this session**
+    sessionConnections.set(sessionId, connection);
+    sessionUsers.set(sessionId, dbUser); // **Track the user for this session**
+    
+    logger.info(`✅ Role-based connection established`, {
+      sessionId: sessionId.substring(0, 8) + '...',
+      dbUser,
+      totalSessions: sessionConnections.size
+    });
+    
     return connection;
     
   } catch (error: any) {
-    console.error(`❌ Failed to create user connection for ${dbUser}:`, error.message);
+    logger.error(`❌ Failed to create role-based connection:`, {
+      sessionId: sessionId.substring(0, 8) + '...',
+      dbUser,
+      error: error.message,
+      stack: error.stack
+    });
     return null;
   }
 }
 
 /**
- * Get connection for a specific session
+ * **Get session connection for a specific session**
  */
 export function getSessionConnection(sessionId: string): sql.ConnectionPool | null {
   const connection = sessionConnections.get(sessionId);
@@ -216,159 +263,126 @@ export function getSessionConnection(sessionId: string): sql.ConnectionPool | nu
 }
 
 /**
- * Get authentication connection (for user lookup only)
- */
-export function getAuthConnection(): sql.ConnectionPool | null {
-  return (authConnection && authConnection.connected) ? authConnection : null;
-}
-
-/**
- * Close connection for a specific session
+ * **Close a specific session connection**
  */
 export async function closeSessionConnection(sessionId: string): Promise<void> {
   const connection = sessionConnections.get(sessionId);
   if (connection) {
     try {
       await connection.close();
-      console.log(`🔌 Closed connection for session: ${sessionId}`);
-    } catch (error) {
-      console.error(`❌ Error closing session connection: ${error}`);
-    } finally {
       sessionConnections.delete(sessionId);
+      sessionUsers.delete(sessionId); // **Also remove user tracking**
+      logger.info(`🔌 Closed session connection: ${sessionId.substring(0, 8)}...`);
+    } catch (error: any) {
+      logger.error(`❌ Error closing session connection ${sessionId.substring(0, 8)}...:`, {
+        error: error.message,
+        stack: error.stack
+      });
     }
   }
 }
 
 /**
- * Execute query with session-specific connection
+ * **NEW: Close default connection (for graceful shutdown)**
  */
-export async function executeUserQuery(sessionId: string, query: string, parameters?: any): Promise<sql.IResult<any>> {
-  const connection = getSessionConnection(sessionId);
-  if (!connection) {
-    throw new Error('No active connection for session. User may need to re-authenticate.');
-  }
-
-  const request = connection.request();
-  
-  if (parameters) {
-    Object.entries(parameters).forEach(([key, value]) => {
-      request.input(key, value);
-    });
-  }
-
-  return await request.query(query);
-}
-
-/**
- * Execute query with authentication connection (read-only operations)
- */
-export async function executeAuthQuery(query: string, parameters?: any): Promise<sql.IResult<any>> {
-  const connection = getAuthConnection();
-  if (!connection) {
-    throw new Error('Authentication connection not available');
-  }
-
-  const request = connection.request();
-  
-  if (parameters) {
-    Object.entries(parameters).forEach(([key, value]) => {
-      request.input(key, value);
-    });
-  }
-
-  return await request.query(query);
-}
-
-/**
- * Get default password for role (in production, these should be from secure config)
- */
-function getDefaultRolePassword(role: string): string {
-  const rolePasswords: Record<string, string> = {
-    'admin': process.env.SQL_ADMIN_PASSWORD || 'AdminPass123!',
-    'manager': process.env.SQL_MANAGER_PASSWORD || 'ManagerPass123!',
-    'operator': process.env.SQL_OPERATOR_PASSWORD || 'OperatorPass123!',
-    'viewer': process.env.SQL_VIEWER_PASSWORD || 'ViewerPass123!',
-    'inventory_operator': process.env.SQL_INVENTORY_OPERATOR_PASSWORD || 'InventoryOp123!',
-    'admin_user': process.env.SQL_ADMIN_USER_PASSWORD || 'AdminUser123!',
-  };
-  
-  return rolePasswords[role] || rolePasswords['viewer'];
-}
-
-/**
- * Test connection with specific credentials
- */
-export async function testConnection(user: string, password: string): Promise<boolean> {
-  try {
-    const testConfig: sql.config = {
-      ...createServerConfig(),
-      user,
-      password,
-    } as sql.config;
-
-    const testPool = new sql.ConnectionPool(testConfig);
-    await testPool.connect();
-    await testPool.request().query('SELECT 1');
-    await testPool.close();
-    
-    return true;
-  } catch {
-    return false;
+export async function closeDefaultConnection(): Promise<void> {
+  if (defaultConnection) {
+    try {
+      await defaultConnection.close();
+      logger.info('🔌 Default SQL connection closed');
+    } catch (error: any) {
+      logger.error('❌ Error closing default connection:', {
+        error: error.message,
+        stack: error.stack
+      });
+    } finally {
+      defaultConnection = null;
+      authConnection = null;
+    }
   }
 }
 
 /**
- * Get connection status for all active sessions
- */
-export function getConnectionStatus(): {
-  authConnection: boolean;
-  activeSessions: number;
-  sessionList: string[];
-} {
-  return {
-    authConnection: !!(authConnection && authConnection.connected),
-    activeSessions: sessionConnections.size,
-    sessionList: Array.from(sessionConnections.keys())
-  };
-}
-
-/**
- * Close all connections gracefully
+ * **Enhanced: Close all connections including default**
  */
 export async function closeAllConnections(): Promise<void> {
-  console.log('🔌 Closing all database connections...');
+  logger.info('🔌 Closing all SQL connections...');
   
-  // Close all session connections
-  const sessionEntries = Array.from(sessionConnections.entries());
-  for (const [sessionId, connection] of sessionEntries) {
-    try {
-      await connection.close();
-      console.log(`Closed session connection: ${sessionId}`);
-    } catch (error) {
-      console.error(`Error closing session ${sessionId}:`, error);
-    }
+  // **Close all session connections**
+  const sessionPromises: Promise<void>[] = [];
+  for (const [sessionId, connection] of Array.from(sessionConnections.entries())) {
+    sessionPromises.push(
+      connection.close()
+        .then(() => {
+          logger.info(`🔌 Closed session connection: ${sessionId.substring(0, 8)}...`);
+        })
+        .catch((error: any) => {
+          logger.error(`❌ Error closing session ${sessionId.substring(0, 8)}...:`, {
+            error: error.message,
+            stack: error.stack
+          });
+        })
+    );
   }
+  
+  // Wait for all session connections to close
+  await Promise.allSettled(sessionPromises);
   sessionConnections.clear();
-
-  // Close auth connection
-  if (authConnection) {
-    try {
-      await authConnection.close();
-      console.log('Closed authentication connection');
-    } catch (error) {
-      console.error('Error closing auth connection:', error);
-    }
-    authConnection = null;
-  }
+  sessionUsers.clear(); // **Clear user tracking as well**
+  
+  // **Close default connection**
+  await closeDefaultConnection();
+  
+  logger.info('✅ All SQL connections closed');
 }
 
-// Handle graceful shutdown
-process.on('SIGINT', async () => {
-  await closeAllConnections();
-  process.exit(0);
-});
+/**
+ * **Keep existing function for backwards compatibility**
+ */
+export async function ensureAuthConnection(): Promise<sql.ConnectionPool | null> {
+  return getDefaultConnection();
+}
 
-process.on('SIGTERM', async () => {
-  await closeAllConnections();
-  process.exit(0);
-});
+// **FIXED: Simplified graceful shutdown setup to avoid conflicts**
+let shutdownHandlersSetup = false;
+
+export function setupGracefulShutdown(): void {
+  if (shutdownHandlersSetup) return;
+  
+  const gracefulShutdown = async (signal: string) => {
+    logger.info(`🛑 Received ${signal}, closing connections...`);
+    try {
+      await closeAllConnections();
+      process.exit(0);
+    } catch (error: any) {
+      logger.error('❌ Error during shutdown:', error);
+      process.exit(1);
+    }
+  };
+
+  process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+  process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+  
+  process.on('uncaughtException', async (error) => {
+    logger.error('💥 Uncaught Exception:', {
+      error: error.message,
+      stack: error.stack
+    });
+    await closeAllConnections();
+    process.exit(1);
+  });
+
+  process.on('unhandledRejection', async (reason, promise) => {
+    logger.error('💥 Unhandled Promise Rejection:', {
+      reason: String(reason),
+      promise: String(promise)
+    });
+    await closeAllConnections();
+    process.exit(1);
+  });
+  
+  shutdownHandlersSetup = true;
+}
+
+// **Call setup function instead of directly setting up handlers**
+setupGracefulShutdown();

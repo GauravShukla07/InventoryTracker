@@ -16,12 +16,14 @@ export async function apiRequest(
 ): Promise<Response> {
   const { method = "GET", body } = options;
   
-  // Get token from localStorage
+  // Get authentication credentials from localStorage
   const token = localStorage.getItem('authToken');
+  const sessionId = localStorage.getItem('sessionId');
   
   const headers: Record<string, string> = {
     ...(body ? { "Content-Type": "application/json" } : {}),
-    ...(token ? { "Authorization": `Bearer ${token}` } : {})
+    ...(token ? { "Authorization": `Bearer ${token}` } : {}),
+    ...(sessionId ? { "x-session-id": sessionId } : {})
   };
   
   const res = await fetch(url, {
@@ -41,11 +43,13 @@ export const getQueryFn: <T>(options: {
 }) => QueryFunction<T> =
   ({ on401: unauthorizedBehavior }) =>
   async ({ queryKey }) => {
-    // Get token from localStorage
+    // Get authentication credentials from localStorage
     const token = localStorage.getItem('authToken');
+    const sessionId = localStorage.getItem('sessionId');
     
     const headers: Record<string, string> = {
-      ...(token ? { "Authorization": `Bearer ${token}` } : {})
+      ...(token ? { "Authorization": `Bearer ${token}` } : {}),
+      ...(sessionId ? { "x-session-id": sessionId } : {})
     };
     
     const res = await fetch(queryKey.join("/") as string, {

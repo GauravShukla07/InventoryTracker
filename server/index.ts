@@ -5,6 +5,8 @@ import { createServer } from "http";
 import router from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import logger from "./logger.js";
+// Add connection manager import
+import { initializeDefaultConnection, getConnectionStatus, closeAllConnections } from "./connection-manager.js";
 
 // Load environment variables
 import dotenv from 'dotenv';
@@ -26,6 +28,36 @@ declare module 'express-session' {
 }
 
 const app = express();
+
+// **NEW: Initialize server with proper SQL connection setup**
+async function initializeServer() {
+  try {
+    logger.info('🚀 Starting Inventory Tracker Server...');
+    
+    // **STEP 1: Establish default SQL connection (john_login_user)**
+    logger.info('🔧 Initializing default SQL connection...');
+    const defaultConnection = await initializeDefaultConnection();
+    
+    if (!defaultConnection) {
+      logger.error('❌ Failed to establish default SQL connection. Server cannot start.');
+      logger.error('💡 Check your .env file and SQL Server connectivity');
+      process.exit(1);
+    }
+    
+    logger.info('✅ Default SQL connection established successfully');
+    logger.info('📊 Connection Status:', getConnectionStatus());
+    
+    return true;
+    
+  } catch (error: any) {
+    logger.error('❌ Server initialization failed:', {
+      error: error.message,
+      stack: error.stack
+    });
+    process.exit(1);
+  }
+}
+
 // Enable CORS for credentials - fix for development
 app.use((req, res, next) => {
   const allowedOrigins = [
@@ -117,7 +149,26 @@ app.use((req, res, next) => {
   next();
 });
 
+// **Enhanced graceful shutdown handling**
+async function gracefulShutdown(signal: string) {
+  logger.info(`🛑 Received ${signal}, starting graceful shutdown...`);
+  try {
+    await closeAllConnections();
+    logger.info('✅ Graceful shutdown completed');
+    process.exit(0);
+  } catch (error) {
+    logger.error('❌ Error during shutdown:', error);
+    process.exit(1);
+  }
+}
+
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+
 (async () => {
+  // **Initialize SQL connections before starting server**
+  await initializeServer();
+  
   // Register API routes
   app.use('/api', router);
 
@@ -158,6 +209,8 @@ app.use((req, res, next) => {
     port,
     host: "127.0.0.1",
   }, () => {
-    log(`serving on port ${port}`);
+    logger.info(`🌐 Server running on port ${port}`);
+    logger.info('🔗 Default SQL connection ready for authentication');
+    logger.info('📊 Server fully initialized and ready to accept requests');
   });
 })();

@@ -15,6 +15,7 @@ import { apiRequest } from "@/lib/queryClient";
 import { loginSchema, registerSchema, type LoginCredentials, type RegisterData } from "@shared/schema-new";
 import { UserPlus, LogIn, Key, Info } from "lucide-react";
 import { ThemeToggle } from "@/components/theme-toggle";
+import logger from "@shared/logger";
 
 export default function Login() {
   const { toast } = useToast();
@@ -51,17 +52,31 @@ export default function Login() {
 
   const loginMutation = useMutation({
     mutationFn: authApi.login,
-    onSuccess: async (data) => {
+    onSuccess: async (data: any) => {
+      logger.info('🔐 Login successful, received data:', { 
+        hasUser: !!data.user, 
+        hasSessionId: !!data.sessionId,
+        userRole: data.user?.role 
+      });
+      
+      // Store session ID for subsequent requests
+      if (data.sessionId) {
+        localStorage.setItem('sessionId', data.sessionId);
+        logger.info('💾 Session ID stored in localStorage');
+      }
+      
       // Set the auth data in cache immediately
       queryClient.setQueryData(["/api/auth/me"], data);
       
-      // Wait a bit longer for cookies to be set, then verify authentication
-      await new Promise(resolve => setTimeout(resolve, 200));
+      // Wait a bit longer for session to be properly established
+      await new Promise(resolve => setTimeout(resolve, 500));
       
       try {
         // Verify authentication works by making a test call
+        logger.info('🔍 Testing authentication with /auth/me call...');
         await authApi.me();
         
+        logger.info('✅ Authentication verification successful');
         toast({
           title: "Welcome back!",
           description: "You have been successfully logged in",
@@ -72,8 +87,12 @@ export default function Login() {
         
         // Redirect to dashboard
         setLocation("/");
-      } catch (error) {
+      } catch (error: any) {
         // If verification fails, show error but don't redirect
+        logger.error("❌ Authentication verification failed:", {
+          error: error.message,
+          hasSessionId: !!localStorage.getItem('sessionId')
+        });
         toast({
           title: "Authentication issue",
           description: "Login succeeded but authentication verification failed. Please try refreshing the page.",
